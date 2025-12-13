@@ -1,6 +1,6 @@
 import { Link } from "wouter";
-import { Zap } from "lucide-react";
-import { SiGithub, SiTwitter, SiDiscord } from "react-icons/si";
+import { Zap, Twitter } from "lucide-react";
+import { SiGithub, SiDiscord } from "react-icons/si";
 
 const footerLinks = {
   Product: [
@@ -51,7 +51,7 @@ export function Footer() {
                 className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center hover-elevate transition-colors"
                 data-testid="link-twitter"
               >
-                <SiTwitter className="w-4 h-4" />
+                <Twitter className="w-4 h-4" />
               </a>
               <a
                 href="https://github.com"

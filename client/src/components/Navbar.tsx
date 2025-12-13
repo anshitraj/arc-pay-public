@@ -116,22 +116,22 @@ export function Navbar() {
               </NavigationMenuItem>
 
               <NavigationMenuItem>
-                <Link href="/pricing">
-                  <NavigationMenuLink className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-pricing">
+                <NavigationMenuLink asChild>
+                  <Link href="/pricing" className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-pricing">
                     Pricing
-                  </NavigationMenuLink>
-                </Link>
+                  </Link>
+                </NavigationMenuLink>
               </NavigationMenuItem>
             </NavigationMenuList>
           </NavigationMenu>
 
           <div className="hidden lg:flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="ghost" data-testid="button-login">Sign in</Button>
-            </Link>
-            <Link href="/dashboard">
-              <Button data-testid="button-dashboard">Dashboard</Button>
-            </Link>
+            <Button variant="ghost" asChild data-testid="button-login">
+              <Link href="/login">Sign in</Link>
+            </Button>
+            <Button asChild data-testid="button-dashboard">
+              <Link href="/dashboard">Dashboard</Link>
+            </Button>
           </div>
 
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -196,12 +196,12 @@ export function Navbar() {
                   </Link>
                 </nav>
                 <div className="p-6 border-t border-border space-y-3">
-                  <Link href="/login" onClick={() => setMobileOpen(false)}>
-                    <Button variant="outline" className="w-full" data-testid="mobile-button-login">Sign in</Button>
-                  </Link>
-                  <Link href="/dashboard" onClick={() => setMobileOpen(false)}>
-                    <Button className="w-full" data-testid="mobile-button-dashboard">Dashboard</Button>
-                  </Link>
+                  <Button variant="outline" className="w-full" asChild data-testid="mobile-button-login">
+                    <Link href="/login" onClick={() => setMobileOpen(false)}>Sign in</Link>
+                  </Button>
+                  <Button className="w-full" asChild data-testid="mobile-button-dashboard">
+                    <Link href="/dashboard" onClick={() => setMobileOpen(false)}>Dashboard</Link>
+                  </Button>
                 </div>
               </div>
             </SheetContent>

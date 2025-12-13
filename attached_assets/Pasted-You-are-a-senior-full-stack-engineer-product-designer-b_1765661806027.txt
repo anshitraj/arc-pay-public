@@ -1,0 +1,200 @@
+You are a senior full-stack engineer + product designer building a production-grade web app.
+
+Build a COMPLETE FULL-STACK APPLICATION named:
+
+ArcPayKit
+Tagline: Stripe-style stablecoin payments, built natively on Arc.
+
+════════════════════════════════════
+GOAL
+════════════════════════════════════
+Build a professional, enterprise-quality payment gateway similar to Stripe / Circle Payments, but Arc-native.
+
+The app must:
+- Look premium (NOT AI-generated)
+- Be fast, clean, and scalable
+- Showcase Arc’s strengths: stable USDC gas, instant finality, deterministic settlement
+- Be suitable for testnet demo & ecosystem recognition
+
+════════════════════════════════════
+TECH STACK (MANDATORY)
+════════════════════════════════════
+Frontend:
+- Next.js 14 (App Router)
+- TypeScript
+- TailwindCSS
+- shadcn/ui
+- lucide-react
+- framer-motion (subtle)
+- next/font (Inter)
+
+Backend:
+- Node.js (Next.js API routes)
+- TypeScript
+- Prisma ORM
+- PostgreSQL (use SQLite fallback for local dev)
+- REST APIs (Stripe-like design)
+
+Blockchain:
+- Arc EVM
+- ethers.js
+- USDC (mock address allowed)
+- No complex smart contracts initially (keep logic server-side)
+
+Auth:
+- Simple email + password (mock)
+- Wallet connect optional (placeholder)
+
+Deployment-ready:
+- Env variables
+- Clean separation of concerns
+
+════════════════════════════════════
+PROJECT STRUCTURE
+════════════════════════════════════
+/src
+ ├─ app
+ │   ├─ page.tsx               # Landing
+ │   ├─ dashboard/page.tsx
+ │   ├─ checkout/[id]/page.tsx
+ │   ├─ docs/page.tsx
+ │   ├─ pricing/page.tsx
+ │   ├─ api
+ │   │   ├─ auth/*
+ │   │   ├─ payments/*
+ │   │   ├─ invoices/*
+ │   │   ├─ webhooks/*
+ │   │   └─ merchants/*
+ ├─ components
+ │   ├─ Navbar.tsx
+ │   ├─ Footer.tsx
+ │   ├─ Hero.tsx
+ │   ├─ FeatureGrid.tsx
+ │   ├─ CodeBlock.tsx
+ │   ├─ DashboardSidebar.tsx
+ │   ├─ KPICard.tsx
+ │   ├─ PaymentsTable.tsx
+ │   ├─ CreatePaymentDialog.tsx
+ ├─ lib
+ │   ├─ arc.ts          # Arc RPC helpers
+ │   ├─ prisma.ts
+ │   ├─ mock.ts
+ │   └─ utils.ts
+ ├─ styles/globals.css
+/prisma/schema.prisma
+.env.example
+
+════════════════════════════════════
+DESIGN SYSTEM (VERY IMPORTANT)
+════════════════════════════════════
+- Dark navy gradient background
+- Enterprise typography (Inter)
+- One accent color (icy blue)
+- No rainbow colors
+- Rounded-2xl everywhere
+- 1px subtle borders
+- Subtle grid / noise overlay
+- Thin curved SVG geometry in hero
+- Smooth but minimal motion
+
+Navbar:
+- Sticky
+- Glassmorphism (backdrop blur)
+- Mega menu for Product & Developers
+- Scroll shrink effect
+- Mobile full-screen menu
+
+════════════════════════════════════
+FEATURES TO IMPLEMENT
+════════════════════════════════════
+
+LANDING PAGE:
+- Premium hero with massive headline
+- Product overview sections
+- Developer quickstart code block
+- Dashboard preview section
+- Testimonials
+- CTA
+- Arc-style footer
+
+DASHBOARD (frontend + backend):
+- Merchant overview KPIs
+- Payments list
+- Create payment link dialog
+- Status badges (pending / final / refunded)
+- Avg settlement time shown as <1s
+
+CHECKOUT PAGE:
+- Stripe-style checkout UI
+- Merchant name + amount
+- Currency selector (USDC, EURC placeholder)
+- Pay button
+- Loading → success animation
+- “Final in <1s on Arc” badge
+
+PAYMENTS API (Stripe-like):
+- POST /api/payments/create
+- GET /api/payments/:id
+- POST /api/payments/:id/confirm
+- Payments stored in DB
+- Blockchain tx mocked or optional
+
+INVOICES:
+- Create invoice
+- Mark paid
+- List invoices
+
+WEBHOOKS (mock):
+- payment.created
+- payment.finalized
+- payment.refunded
+- Show webhook delivery logs in dashboard
+
+TREASURY (mock but visible):
+- Show balances per stablecoin
+- Manual “rebalance” button
+- Visual explanation (no real FX logic)
+
+════════════════════════════════════
+DATABASE (PRISMA)
+════════════════════════════════════
+Models:
+- User
+- Merchant
+- Payment
+- Invoice
+- WebhookEndpoint
+- WebhookEvent
+
+Use clean schema design.
+
+════════════════════════════════════
+BLOCKCHAIN INTEGRATION
+════════════════════════════════════
+- ethers.js Arc provider
+- Arc RPC via env
+- USDC contract interface (minimal ABI)
+- Send transaction or mock tx hash
+- Store txHash + finality timestamp
+
+════════════════════════════════════
+QUALITY BAR
+════════════════════════════════════
+- Code must be readable
+- No placeholder lorem ipsum
+- No random styles
+- Perfect spacing & alignment
+- Looks like Stripe/Circle quality
+- Works smoothly on Replit
+
+════════════════════════════════════
+OUTPUT REQUIREMENTS
+════════════════════════════════════
+- Generate ALL code files
+- Include comments where needed
+- Include .env.example
+- App must run with:
+  npm install
+  npm run dev
+
+BUILD EVERYTHING. DO NOT SKIP FILES.

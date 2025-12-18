@@ -26,9 +26,9 @@ PORT=3000
 SESSION_SECRET=change-this-to-a-random-secret-string
 
 # ARC Testnet Configuration
-ARC_CHAIN_ID=1243
-ARC_RPC_URL=https://rpc-testnet.arc.network
-ARC_EXPLORER_URL=https://testnet-explorer.arc.network/tx
+ARC_CHAIN_ID=5042002
+ARC_RPC_URL=https://rpc.testnet.arc.network
+ARC_EXPLORER_URL=https://testnet.arcscan.app/tx
 
 # Demo Mode (set to false for production)
 DEMO_MODE=true

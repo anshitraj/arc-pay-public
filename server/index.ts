@@ -74,7 +74,15 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Initialize admin user from ADMIN_WALLET env var
+  const { initializeAdminFromWallet } = await import("./admin/init");
+  await initializeAdminFromWallet();
+  
   await registerRoutes(httpServer, app);
+  
+  // Register admin routes
+  const { registerAdminRoutes } = await import("./routes/admin");
+  registerAdminRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

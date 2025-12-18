@@ -4,22 +4,22 @@ import { mainnet, sepolia } from 'wagmi/chains';
 
 // ARC Testnet configuration
 const arcTestnet = {
-  id: parseInt(import.meta.env.VITE_ARC_CHAIN_ID || '1243', 10),
+  id: parseInt(import.meta.env.VITE_ARC_CHAIN_ID || '5042002', 10),
   name: 'ARC Testnet',
   nativeCurrency: {
-    decimals: 18,
-    name: 'Ether',
-    symbol: 'ETH',
+    decimals: 6, // USDC uses 6 decimals
+    name: 'USDC',
+    symbol: 'USDC',
   },
   rpcUrls: {
     default: {
-      http: [import.meta.env.VITE_ARC_RPC_URL || 'https://rpc-testnet.arc.network'],
+      http: [import.meta.env.VITE_ARC_RPC_URL || 'https://rpc.testnet.arc.network'],
     },
   },
   blockExplorers: {
     default: {
       name: 'ARC Explorer',
-      url: import.meta.env.VITE_ARC_EXPLORER_URL || 'https://testnet-explorer.arc.network',
+      url: import.meta.env.VITE_ARC_EXPLORER_URL || 'https://testnet.arcscan.app',
     },
   },
   testnet: true,

@@ -14,12 +14,15 @@ import {
 } from "@/components/ui/select";
 import { Zap, Check, Loader2, Shield, Clock, AlertCircle, Wallet, ExternalLink } from "lucide-react";
 import type { Payment } from "@shared/schema";
+import type { MerchantProfile } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useWallet } from "@/lib/wallet-rainbowkit";
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { getExplorerLink, getArcNetworkName, getArcChainId } from "@/lib/arc";
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits } from 'viem';
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 // USDC ERC20 ABI (transfer function only)
 const USDC_ABI = [
@@ -36,20 +39,51 @@ const USDC_ABI = [
 ] as const;
 
 // USDC token address on ARC Testnet (should be set in env)
-const USDC_ADDRESS = (import.meta.env.VITE_USDC_TOKEN_ADDRESS || "0x0000000000000000000000000000000000000000") as `0x${string}`;
+// Official ARC Testnet USDC address (native currency, used for gas fees)
+const USDC_ADDRESS = (import.meta.env.VITE_USDC_TOKEN_ADDRESS || "0x3600000000000000000000000000000000000000") as `0x${string}`;
 const USDC_DECIMALS = 6; // USDC uses 6 decimals
 
 export default function Checkout() {
   const { id } = useParams<{ id: string }>();
   const [currency, setCurrency] = useState("USDC");
   const [paymentState, setPaymentState] = useState<"idle" | "processing" | "pending" | "success" | "error">("idle");
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const { address, isConnected, isArcChain, switchToArcChain } = useWallet();
 
-  const { data: payment, isLoading, error, refetch } = useQuery<Payment>({
+  interface PaymentWithProfile extends Payment {
+    merchantProfile?: {
+      businessName: string;
+      logoUrl: string | null;
+    } | null;
+  }
+
+  const { data: payment, isLoading, error, refetch } = useQuery<PaymentWithProfile>({
     queryKey: ["/api/payments", id],
     enabled: !!id,
     refetchInterval: paymentState === "pending" ? 3000 : false, // Poll every 3s when pending
   });
+
+  // Check merchant verification status (public endpoint by wallet address)
+  const { data: verificationStatus } = useQuery<{ verified: boolean }>({
+    queryKey: ["/api/badges/verification", payment?.merchantWallet],
+    queryFn: async () => {
+      if (!payment?.merchantWallet) return { verified: false };
+      const response = await fetch(`/api/badges/verification/${payment.merchantWallet}`);
+      if (!response.ok) return { verified: false };
+      return await response.json();
+    },
+    enabled: !!payment?.merchantWallet,
+    refetchInterval: 30000, // Refetch every 30s
+  });
+
+  const isVerified = verificationStatus?.verified ?? false;
+
+  // Get display name and logo
+  const merchantDisplayName = payment?.merchantProfile?.businessName || 
+    (payment?.merchantWallet ? `${payment.merchantWallet.slice(0, 6)}...${payment.merchantWallet.slice(-4)}` : "Merchant");
+  const merchantLogoUrl = payment?.merchantProfile?.logoUrl || null;
 
   // Auto-switch to ARC chain when connected
   useEffect(() => {
@@ -95,6 +129,8 @@ export default function Checkout() {
         paymentId: id,
         txHash: hash,
         payerWallet: address,
+        customerEmail: customerEmail || undefined,
+        customerName: customerName || undefined,
       });
       return await result.json();
     },
@@ -112,13 +148,22 @@ export default function Checkout() {
   useEffect(() => {
     if (txSuccess && submitTxMutation.isSuccess) {
       // Transaction confirmed and submitted to backend
+      setPaymentError(null);
+      setPaymentState("success"); // Immediately set to success to prevent multiple payments
       refetch(); // Refresh payment status
     } else if (txError || writeError) {
       setPaymentState("error");
+      const errorMsg = writeError?.message || txError?.message;
+      if (errorMsg?.includes("RPC endpoint")) {
+        setPaymentError("Network error: Please check your RPC connection and try again.");
+      } else {
+        setPaymentError(errorMsg || "Transaction failed. Please try again.");
+      }
     } else if (submitTxMutation.isError) {
       setPaymentState("error");
+      setPaymentError(submitTxMutation.error?.message || "Failed to submit transaction to server.");
     }
-  }, [txSuccess, txError, writeError, submitTxMutation.isSuccess, submitTxMutation.isError, refetch]);
+  }, [txSuccess, txError, writeError, submitTxMutation.isSuccess, submitTxMutation.isError, submitTxMutation.error, refetch]);
 
   // Handle payment status changes from backend polling
   useEffect(() => {
@@ -134,26 +179,62 @@ export default function Checkout() {
   // Main payment handler
   const handlePay = async () => {
     try {
+      // Prevent multiple payments if already confirmed
+      if (payment?.status === "confirmed" || paymentState === "success") {
+        setPaymentState("success");
+        return;
+      }
+
       if (!payment || !payment.merchantWallet) {
         throw new Error("Payment or merchant wallet not found");
+      }
+
+      if (!address) {
+        throw new Error("Wallet not connected");
+      }
+
+      // Prevent payment if already processing or pending
+      if (paymentState === "processing" || paymentState === "pending" || payment?.status === "pending") {
+        return;
       }
 
       setPaymentState("processing");
       await validateChain();
 
+      // Normalize and validate merchant wallet address
+      const merchantWallet = (payment.merchantWallet.toLowerCase() as `0x${string}`);
+      
+      // Ensure merchant wallet is different from sender
+      if (merchantWallet.toLowerCase() === address.toLowerCase()) {
+        throw new Error("Cannot pay to your own wallet address");
+      }
+
+      // Validate wallet address format
+      if (!/^0x[a-f0-9]{40}$/.test(merchantWallet)) {
+        throw new Error("Invalid merchant wallet address format");
+      }
+
       // Execute USDC transfer directly
       const amount = parseFloat(payment.amount);
       const amountInUnits = parseUnits(amount.toFixed(USDC_DECIMALS), USDC_DECIMALS);
+      
+      console.log("Transferring USDC:", {
+        to: merchantWallet,
+        amount: amountInUnits.toString(),
+        from: address,
+      });
       
       writeContract({
         address: USDC_ADDRESS,
         abi: USDC_ABI,
         functionName: "transfer",
-        args: [payment.merchantWallet as `0x${string}`, amountInUnits],
+        args: [merchantWallet, amountInUnits],
       });
+      setPaymentError(null); // Clear any previous errors
     } catch (error) {
       console.error("Payment error:", error);
       setPaymentState("error");
+      setPaymentError(error instanceof Error ? error.message : "Payment failed. Please try again.");
     }
   };
 
@@ -184,10 +265,89 @@ export default function Checkout() {
   const amount = parseFloat(payment.amount);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4" data-testid="page-checkout">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent" />
-      <div className="absolute top-0 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl opacity-50" />
-      <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/5 rounded-full blur-2xl" />
+    <div className="min-h-screen bg-background flex flex-col" data-testid="page-checkout">
+      {/* Header with Logo and Connect Wallet */}
+      <header className="w-full border-b border-border bg-background/80 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+                <Zap className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <span className="text-xl font-bold tracking-tight">ArcPayKit</span>
+            </div>
+            <div className="flex items-center">
+              <ConnectButton.Custom>
+                {({
+                  account,
+                  chain,
+                  openAccountModal,
+                  openChainModal,
+                  openConnectModal,
+                  authenticationStatus,
+                  mounted,
+                }) => {
+                  const ready = mounted;
+                  const connected =
+                    ready &&
+                    account &&
+                    chain &&
+                    (!authenticationStatus ||
+                      authenticationStatus === 'authenticated');
+
+                  if (!ready) {
+                    return null;
+                  }
+
+                  if (!connected) {
+                    return (
+                      <Button
+                        onClick={openConnectModal}
+                        type="button"
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
+                        <Wallet className="w-4 h-4" />
+                        Connect Wallet
+                      </Button>
+                    );
+                  }
+
+                  if (chain.unsupported) {
+                    return (
+                      <Button
+                        onClick={openChainModal}
+                        type="button"
+                        variant="destructive"
+                        className="flex items-center gap-2"
+                      >
+                        Wrong Network
+                      </Button>
+                    );
+                  }
+
+                  return (
+                    <Button
+                      onClick={openAccountModal}
+                      type="button"
+                      variant="outline"
+                      className="flex items-center gap-2"
+                    >
+                      <Wallet className="w-4 h-4" />
+                      {account.displayName}
+                    </Button>
+                  );
+                }}
+              </ConnectButton.Custom>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex-1 flex items-center justify-center p-4 relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl opacity-50" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/5 rounded-full blur-2xl" />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -198,11 +358,36 @@ export default function Checkout() {
         <Card className="bg-card/80 backdrop-blur-xl border-border shadow-2xl shadow-primary/5">
           <CardHeader className="text-center pb-2">
             <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                <Zap className="w-6 h-6 text-primary-foreground" />
+              {merchantLogoUrl ? (
+                <img 
+                  src={merchantLogoUrl} 
+                  alt={merchantDisplayName}
+                  className="w-10 h-10 rounded-xl object-cover"
+                  onError={(e) => {
+                    // Hide image if it fails to load - icon will show below
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
+                  <Zap className="w-6 h-6 text-primary-foreground" />
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold">{merchantDisplayName}</span>
+                {isVerified && (
+                  <Badge variant="default" className="gap-1">
+                    <Shield className="w-3 h-3" />
+                    Verified
+                  </Badge>
+                )}
               </div>
-              <span className="text-lg font-bold">ArcPayKit</span>
             </div>
+            {payment.isTest && (
+              <Badge variant="secondary" className="mb-2">
+                Test mode
+              </Badge>
+            )}
             {payment.description && (
               <p className="text-muted-foreground">{payment.description}</p>
             )}
@@ -227,24 +412,94 @@ export default function Checkout() {
                     <Check className="w-10 h-10 text-green-500" />
                   </motion.div>
                   <h2 className="text-2xl font-bold mb-2">Payment Complete</h2>
-                  <p className="text-muted-foreground mb-4">
-                    Your payment of {amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {currency} has been processed.
+                  <p className="text-muted-foreground mb-6">
+                    Your payment has been successfully processed.
                   </p>
-                  {payment.txHash && (
-                    <a
-                      href={getExplorerLink(payment.txHash)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-sm text-primary hover:underline mb-3"
-                    >
-                      View on Explorer
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  )}
+
+                  {/* Receipt Details */}
+                  <div className="bg-muted/50 rounded-lg p-4 mb-4 text-left space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Merchant</span>
+                      <span className="text-sm font-medium">{merchantDisplayName}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Amount</span>
+                      <span className="text-sm font-medium">
+                        {amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {currency}
+                      </span>
+                    </div>
+                    {payment.description && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Description</span>
+                        <span className="text-sm font-medium">{payment.description}</span>
+                      </div>
+                    )}
+                    {payment.payerWallet && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">From</span>
+                        <span className="text-sm font-mono">
+                          {payment.payerWallet.slice(0, 6)}...{payment.payerWallet.slice(-4)}
+                        </span>
+                      </div>
+                    )}
+                    {payment.txHash && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Transaction</span>
+                        <a
+                          href={getExplorerLink(payment.txHash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-mono"
+                        >
+                          {payment.txHash.slice(0, 8)}...{payment.txHash.slice(-6)}
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    )}
+                    {payment.createdAt && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Date</span>
+                        <span className="text-sm font-medium">
+                          {new Date(payment.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                    {payment.settlementTime && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Settlement Time</span>
+                        <span className="text-sm font-medium text-green-500">
+                          {payment.settlementTime}s
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
                   <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/30">
                     <Clock className="w-3 h-3 mr-1" />
                     {payment.settlementTime ? `Finalized in ${payment.settlementTime}s` : "Finalized"}
                   </Badge>
+
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
+                    <Button
+                      onClick={() => {
+                        // Close or redirect - you can customize this
+                        window.location.href = "/";
+                      }}
+                      className="w-full sm:w-auto"
+                    >
+                      Done
+                    </Button>
+                    {payment.txHash && (
+                      <Button
+                        variant="outline"
+                        onClick={() => window.open(getExplorerLink(payment.txHash!), "_blank")}
+                        className="w-full sm:w-auto"
+                      >
+                        View on ArcScan
+                        <ExternalLink className="w-4 h-4 ml-2" />
+                      </Button>
+                    )}
+                  </div>
                 </motion.div>
               ) : (
                 <motion.div
@@ -254,6 +509,32 @@ export default function Checkout() {
                   exit={{ opacity: 0 }}
                   className="space-y-6"
                 >
+                  {/* Customer Information Fields */}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="customer-name">Name</Label>
+                      <Input
+                        id="customer-name"
+                        type="text"
+                        placeholder="Enter your name"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="customer-email">Email</Label>
+                      <Input
+                        id="customer-email"
+                        type="email"
+                        placeholder="Enter your email"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
                   <div className="text-center">
                     <div className="text-5xl font-bold tracking-tight mb-2">
                       ${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
@@ -285,70 +566,23 @@ export default function Checkout() {
                   </div>
 
                   {!isConnected && (
+                    <div className="mb-3 p-4 bg-muted/50 rounded-lg border border-border">
+                      <p className="text-sm text-muted-foreground text-center mb-2">
+                        Please connect your wallet using the button in the top right corner to proceed with payment
+                      </p>
+                    </div>
+                  )}
+
+                  {isConnected && !isArcChain && (
                     <div className="mb-3">
-                      <ConnectButton.Custom>
-                        {({
-                          account,
-                          chain,
-                          openAccountModal,
-                          openChainModal,
-                          openConnectModal,
-                          authenticationStatus,
-                          mounted,
-                        }) => {
-                          const ready = mounted;
-                          const connected =
-                            ready &&
-                            account &&
-                            chain &&
-                            (!authenticationStatus ||
-                              authenticationStatus === 'authenticated');
-
-                          return (
-                            <div
-                              {...(!ready && {
-                                'aria-hidden': true,
-                                'style': {
-                                  opacity: 0,
-                                  pointerEvents: 'none',
-                                  userSelect: 'none',
-                                },
-                              })}
-                            >
-                              {(() => {
-                                if (!connected) {
-                                  return (
-                                    <Button
-                                      onClick={openConnectModal}
-                                      type="button"
-                                      className="w-full h-12 text-base"
-                                      variant="outline"
-                                    >
-                                      <Wallet className="w-5 h-5 mr-2" />
-                                      Connect Wallet
-                                    </Button>
-                                  );
-                                }
-
-                                if (chain.unsupported) {
-                                  return (
-                                    <Button
-                                      onClick={openChainModal}
-                                      type="button"
-                                      variant="destructive"
-                                      className="w-full h-12 text-base"
-                                    >
-                                      Wrong network - Switch to ARC Testnet
-                                    </Button>
-                                  );
-                                }
-
-                                return null;
-                              })()}
-                            </div>
-                          );
-                        }}
-                      </ConnectButton.Custom>
+                      <Button
+                        onClick={() => switchToArcChain()}
+                        type="button"
+                        variant="destructive"
+                        className="w-full h-12 text-base"
+                      >
+                        Wrong network - Switch to ARC Testnet
+                      </Button>
                     </div>
                   )}
 
@@ -358,6 +592,8 @@ export default function Checkout() {
                     disabled={
                       paymentState === "processing" || 
                       paymentState === "pending" ||
+                      paymentState === "success" ||
+                      payment?.status === "confirmed" ||
                       isWriting || 
                       isWaiting ||
                       !isConnected || 
@@ -382,9 +618,14 @@ export default function Checkout() {
                   </Button>
 
                   {paymentState === "error" && (
-                    <p className="text-sm text-destructive text-center">
-                      {writeError?.message || submitTxMutation.error?.message || "Payment failed. Please try again."}
-                    </p>
+                    <div className="text-sm text-destructive text-center space-y-1">
+                      <p>{paymentError || writeError?.message || submitTxMutation.error?.message || "Payment failed. Please try again."}</p>
+                      {writeError?.message?.includes("RPC") && (
+                        <p className="text-xs text-muted-foreground">
+                          This may be a temporary network issue. Please wait a moment and try again.
+                        </p>
+                      )}
+                    </div>
                   )}
 
                   {paymentState === "pending" && txHash && (
@@ -421,6 +662,7 @@ export default function Checkout() {
           </Badge>
         </div>
       </motion.div>
+      </div>
     </div>
   );
 }

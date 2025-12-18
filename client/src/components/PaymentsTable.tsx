@@ -1,8 +1,6 @@
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -17,16 +15,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, MoreHorizontal, ExternalLink, Copy, RefreshCw } from "lucide-react";
+import { MoreHorizontal, ExternalLink, Copy, RefreshCw, FileCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import type { Payment } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { getExplorerLink } from "@/lib/arc";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface PaymentsTableProps {
   payments: Payment[];
   loading?: boolean;
   onRefund?: (id: string) => void;
+  search?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -38,8 +39,7 @@ const statusColors: Record<string, string> = {
   expired: "bg-red-500/20 text-red-500 border-red-500/30",
 };
 
-export function PaymentsTable({ payments, loading, onRefund }: PaymentsTableProps) {
-  const [search, setSearch] = useState("");
+export function PaymentsTable({ payments, loading, onRefund, search = "" }: PaymentsTableProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -78,7 +78,6 @@ export function PaymentsTable({ payments, loading, onRefund }: PaymentsTableProp
       <Card className="bg-card/50 backdrop-blur-sm">
         <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
           <CardTitle>Recent Payments</CardTitle>
-          <div className="w-64 h-9 rounded-md bg-muted animate-pulse" />
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -98,18 +97,8 @@ export function PaymentsTable({ payments, loading, onRefund }: PaymentsTableProp
 
   return (
     <Card className="bg-card/50 backdrop-blur-sm" data-testid="payments-table">
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4 space-y-0 pb-4">
+      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
         <CardTitle>Recent Payments</CardTitle>
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search payments..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-payments"
-          />
-        </div>
       </CardHeader>
       <CardContent>
         {filteredPayments.length === 0 ? (
@@ -127,6 +116,7 @@ export function PaymentsTable({ payments, loading, onRefund }: PaymentsTableProp
                   <TableHead>Customer</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Settlement</TableHead>
+                  <TableHead>Receipt</TableHead>
                   <TableHead className="w-12"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -169,20 +159,23 @@ export function PaymentsTable({ payments, loading, onRefund }: PaymentsTableProp
                       {formatDate(payment.createdAt)}
                     </TableCell>
                     <TableCell>
-                      {payment.status === "confirmed" && payment.updatedAt ? (
-                        <span className="text-green-500 text-sm">
-                          {new Date(payment.updatedAt).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      ) : payment.settlementTime ? (
-                        <span className="text-green-500 text-sm">{payment.settlementTime}s</span>
+                      {payment.txHash ? (
+                        <a
+                          href={getExplorerLink(payment.txHash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline flex items-center gap-1 text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {payment.txHash.slice(0, 8)}...
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
                       ) : (
                         <span className="text-muted-foreground text-sm">-</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <PaymentProofStatus paymentId={payment.id} status={payment.status} />
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -240,5 +233,31 @@ export function PaymentsTable({ payments, loading, onRefund }: PaymentsTableProp
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// Component to display proof status for a payment
+function PaymentProofStatus({ paymentId, status }: { paymentId: string; status: string }) {
+  const { data: proofStatus } = useQuery<{ exists: boolean; proofTxHash?: string }>({
+    queryKey: [`/api/payments/${paymentId}/proof`],
+    enabled: status === "confirmed",
+    refetchInterval: 30000, // Refetch every 30s
+  });
+
+  if (status !== "confirmed") {
+    return <span className="text-muted-foreground text-sm">-</span>;
+  }
+
+  if (proofStatus?.exists && proofStatus.proofTxHash) {
+    return (
+      <div className="flex items-center gap-1">
+        <FileCheck className="w-3 h-3 text-green-500" />
+        <span className="text-xs text-green-500">On-chain</span>
+      </div>
+    );
+  }
+
+  return (
+    <span className="text-xs text-muted-foreground">Pending</span>
   );
 }

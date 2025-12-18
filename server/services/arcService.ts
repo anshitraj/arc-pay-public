@@ -3,9 +3,9 @@
  * Handles ARC chain interactions: RPC calls, transaction verification, explorer links
  */
 
-const ARC_CHAIN_ID = parseInt(process.env.ARC_CHAIN_ID || "1243", 10); // ARC Testnet default
-const ARC_RPC_URL = process.env.ARC_RPC_URL || "https://rpc-testnet.arc.network";
-const ARC_EXPLORER_URL = process.env.ARC_EXPLORER_URL || "https://testnet-explorer.arc.network/tx";
+const ARC_CHAIN_ID = parseInt(process.env.ARC_CHAIN_ID || "5042002", 10); // ARC Testnet default
+const ARC_RPC_URL = process.env.ARC_RPC_URL || "https://rpc.testnet.arc.network";
+const ARC_EXPLORER_BASE_URL = process.env.ARC_EXPLORER_URL || "https://testnet.arcscan.app";
 
 export interface TransactionStatus {
   confirmed: boolean;
@@ -22,7 +22,7 @@ export function getArcChainConfig() {
   return {
     chainId: ARC_CHAIN_ID,
     rpcUrl: ARC_RPC_URL,
-    explorerUrl: ARC_EXPLORER_URL,
+    explorerUrl: `${ARC_EXPLORER_BASE_URL}/tx`,
   };
 }
 
@@ -137,7 +137,10 @@ export async function getBlockTimestamp(blockNumber: number): Promise<Date | nul
  * Generate explorer link for a transaction
  */
 export function getExplorerLink(txHash: string): string {
-  return `${ARC_EXPLORER_URL}/${txHash}`;
+  // ArcScan uses format: https://testnet.arcscan.app/tx/{txHash}
+  // Ensure txHash doesn't have leading/trailing slashes
+  const cleanTxHash = txHash.trim();
+  return `${ARC_EXPLORER_BASE_URL}/tx/${cleanTxHash}`;
 }
 
 /**
@@ -155,5 +158,69 @@ export function formatAmount(amount: string, decimals: number = 6): string {
   const num = parseFloat(amount);
   const multiplier = Math.pow(10, decimals);
   return Math.floor(num * multiplier).toString();
+}
+
+/**
+ * Check if a wallet address owns a MerchantBadge token on-chain
+ * @param walletAddress The wallet address to check
+ * @param contractAddress The MerchantBadge contract address
+ * @returns true if the wallet owns a badge, false otherwise
+ */
+export async function checkBadgeOwnership(
+  walletAddress: string,
+  contractAddress: string
+): Promise<boolean> {
+  try {
+    // Function selector for hasBadge(address) is 0x8da5cb5b
+    // This is the first 4 bytes of keccak256("hasBadge(address)")
+    const functionSelector = "0x8da5cb5b";
+    
+    // Encode address parameter (32 bytes, padded, lowercase, no 0x prefix)
+    const address = walletAddress.toLowerCase().startsWith("0x")
+      ? walletAddress.slice(2).toLowerCase()
+      : walletAddress.toLowerCase();
+    const paddedAddress = address.padStart(64, "0");
+    
+    // Combine selector + encoded parameter
+    const encodedData = functionSelector + paddedAddress;
+
+    const response = await fetch(ARC_RPC_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "eth_call",
+        params: [
+          {
+            to: contractAddress,
+            data: encodedData,
+          },
+          "latest",
+        ],
+        id: 1,
+      }),
+    });
+
+    const data = await response.json();
+    if (data.error) {
+      console.error("Error checking badge ownership:", data.error);
+      return false;
+    }
+
+    if (!data.result || data.result === "0x") {
+      return false;
+    }
+
+    // Parse boolean result
+    // Result is 32 bytes: 0x0000000000000000000000000000000000000000000000000000000000000001 = true
+    // Check if any byte (except leading zeros) is non-zero
+    const resultHex = data.result.replace("0x", "");
+    // Check last byte (most common for bool)
+    const lastByte = resultHex.slice(-2);
+    return lastByte !== "00";
+  } catch (error) {
+    console.error("Error checking badge ownership:", error);
+    return false;
+  }
 }
 

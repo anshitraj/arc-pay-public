@@ -107,20 +107,79 @@ async function checkPaymentTransaction(payment: typeof payments.$inferSelect): P
 }
 
 /**
+ * Check if an error is a database connection error
+ */
+function isConnectionError(error: any): boolean {
+  if (!error) return false;
+  const message = error.message?.toLowerCase() || "";
+  const code = error.code?.toLowerCase() || "";
+  
+  return (
+    message.includes("connection terminated") ||
+    message.includes("connection closed") ||
+    message.includes("connection refused") ||
+    message.includes("connection reset") ||
+    message.includes("econnreset") ||
+    message.includes("econnrefused") ||
+    message.includes("etimedout") ||
+    code === "econnreset" ||
+    code === "econnrefused" ||
+    code === "etimedout" ||
+    code === "57p01" || // PostgreSQL: terminating connection due to administrator command
+    code === "57p02" || // PostgreSQL: terminating connection due to crash
+    code === "57p03" || // PostgreSQL: terminating connection due to idle timeout
+    code === "08003" || // PostgreSQL: connection does not exist
+    code === "08006"    // PostgreSQL: connection failure
+  );
+}
+
+/**
+ * Retry a database operation with exponential backoff
+ */
+async function retryDbOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries = 3,
+  initialDelay = 1000
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      
+      if (!isConnectionError(error) || attempt === maxRetries - 1) {
+        throw error;
+      }
+      
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = initialDelay * Math.pow(2, attempt);
+      console.warn(`Database connection error (attempt ${attempt + 1}/${maxRetries}), retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
+/**
  * Watch pending payments and poll for confirmations
  */
 export async function watchPendingPayments(): Promise<void> {
   try {
     // Get all pending payments with txHash (skip demo payments)
-    const pendingPayments = await db
-      .select()
-      .from(payments)
-      .where(
-        and(
-          eq(payments.status, "pending"),
-          isNotNull(payments.txHash)
+    const pendingPayments = await retryDbOperation(() =>
+      db
+        .select()
+        .from(payments)
+        .where(
+          and(
+            eq(payments.status, "pending"),
+            isNotNull(payments.txHash)
+          )
         )
-      );
+    );
 
     const realPayments = pendingPayments.filter((p) => p.txHash && !p.isDemo);
 
@@ -129,7 +188,12 @@ export async function watchPendingPayments(): Promise<void> {
       await checkPaymentTransaction(payment);
     }
   } catch (error) {
-    console.error("Error in transaction watcher:", error);
+    // Only log if it's not a connection error (connection errors are expected and will retry)
+    if (!isConnectionError(error)) {
+      console.error("Error in transaction watcher:", error);
+    } else {
+      console.warn("Database connection error in transaction watcher, will retry on next interval");
+    }
   }
 }
 

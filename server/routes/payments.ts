@@ -15,7 +15,7 @@ const createPaymentSchema = z.object({
   amount: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Amount must be positive"),
   currency: z.string().optional().default("USDC"),
   description: z.string().optional(),
-  customerEmail: z.string().email().optional(),
+  customerEmail: z.string().email("Invalid email").optional().or(z.literal("").transform(() => undefined)),
   merchantWallet: z.string().refine((val) => /^0x[a-fA-F0-9]{40}$/.test(val), "Invalid wallet address"),
   expiresInMinutes: z.number().int().positive().optional(),
 });
@@ -23,6 +23,8 @@ const createPaymentSchema = z.object({
 const confirmPaymentSchema = z.object({
   txHash: z.string().refine((val) => /^0x[a-fA-F0-9]{64}$/.test(val), "Invalid transaction hash"),
   payerWallet: z.string().refine((val) => /^0x[a-fA-F0-9]{40}$/.test(val), "Invalid wallet address"),
+  customerEmail: z.string().email("Invalid email").optional().or(z.literal("").transform(() => undefined)),
+  customerName: z.string().optional(),
 });
 
 const failPaymentSchema = z.object({
@@ -101,13 +103,13 @@ export function registerPaymentRoutes(app: Express) {
     rateLimit,
     async (req, res) => {
       try {
-        const { paymentId, txHash, payerWallet } = req.body;
+        const { paymentId, txHash, payerWallet, customerEmail, customerName } = req.body;
         
         if (!paymentId) {
           return res.status(400).json({ error: "paymentId is required" });
         }
 
-        const result = confirmPaymentSchema.safeParse({ txHash, payerWallet });
+        const result = confirmPaymentSchema.safeParse({ txHash, payerWallet, customerEmail, customerName });
         if (!result.success) {
           return res.status(400).json({ error: result.error.errors[0].message });
         }
@@ -123,11 +125,28 @@ export function registerPaymentRoutes(app: Express) {
           return res.status(403).json({ error: "Access denied" });
         }
 
+        // Prepare metadata with customer name if provided
+        let metadata = payment.metadata;
+        if (result.data.customerName) {
+          try {
+            const existingMetadata = metadata ? JSON.parse(metadata) : {};
+            metadata = JSON.stringify({
+              ...existingMetadata,
+              customerName: result.data.customerName,
+            });
+          } catch {
+            // If metadata is invalid JSON, create new object
+            metadata = JSON.stringify({ customerName: result.data.customerName });
+          }
+        }
+
         // Update payment status to pending (will be confirmed by background checker)
         await storage.updatePayment(paymentId, {
           status: "pending",
           txHash: result.data.txHash,
           payerWallet: result.data.payerWallet,
+          customerEmail: result.data.customerEmail || payment.customerEmail,
+          metadata: metadata || payment.metadata,
         });
 
         const updatedPayment = await storage.getPayment(paymentId);

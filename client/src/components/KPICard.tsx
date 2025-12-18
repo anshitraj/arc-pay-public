@@ -49,7 +49,7 @@ export function KPICard({ title, value, change, changeLabel, icon: Icon, loading
           {change !== undefined && (
             <div className={`flex items-center gap-1 text-sm ${getTrendColor()}`}>
               <TrendIcon className="w-4 h-4" />
-              <span>{Math.abs(change)}%</span>
+              <span>{Math.abs(change).toFixed(2)}%</span>
             </div>
           )}
         </div>

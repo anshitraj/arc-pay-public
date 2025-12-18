@@ -54,7 +54,7 @@ export async function connectInjectedWallet(): Promise<string> {
   }
 
   const ethereum = window.ethereum as InjectedProvider;
-  const arcChainId = parseInt(import.meta.env.VITE_ARC_CHAIN_ID || "1243", 10);
+  const arcChainId = parseInt(import.meta.env.VITE_ARC_CHAIN_ID || "5042002", 10);
 
   try {
     // Request account access
@@ -81,12 +81,12 @@ export async function connectInjectedWallet(): Promise<string> {
                 chainId: `0x${arcChainId.toString(16)}`,
                 chainName: "ARC Testnet",
                 nativeCurrency: {
-                  name: "ETH",
-                  symbol: "ETH",
-                  decimals: 18,
+                  name: "USDC",
+                  symbol: "USDC",
+                  decimals: 6,
                 },
-                rpcUrls: [import.meta.env.VITE_ARC_RPC_URL || "https://rpc-testnet.arc.network"],
-                blockExplorerUrls: [import.meta.env.VITE_ARC_EXPLORER_URL || "https://testnet-explorer.arc.network"],
+                rpcUrls: [import.meta.env.VITE_ARC_RPC_URL || "https://rpc.testnet.arc.network"],
+                blockExplorerUrls: [import.meta.env.VITE_ARC_EXPLORER_URL || "https://testnet.arcscan.app"],
               },
             ],
           });
@@ -118,8 +118,8 @@ export async function initWalletConnect() {
   }
 
   try {
-    // ARC Testnet chain ID: 1243 (configurable via env)
-    const arcChainId = parseInt(import.meta.env.VITE_ARC_CHAIN_ID || "1243", 10);
+    // ARC Testnet chain ID: 5042002 (configurable via env)
+    const arcChainId = parseInt(import.meta.env.VITE_ARC_CHAIN_ID || "5042002", 10);
     
     walletConnectProvider = await EthereumProvider.init({
       projectId,

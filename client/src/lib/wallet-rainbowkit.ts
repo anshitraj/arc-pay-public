@@ -15,7 +15,7 @@ export function useWallet() {
   const { switchChain } = useSwitchChain();
   const currentChainId = useChainId();
 
-  const arcChainId = parseInt(import.meta.env.VITE_ARC_CHAIN_ID || '1243', 10);
+  const arcChainId = parseInt(import.meta.env.VITE_ARC_CHAIN_ID || '5042002', 10);
 
   const switchToArcChain = async () => {
     if (typeof window === 'undefined') {

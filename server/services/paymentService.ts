@@ -8,6 +8,7 @@ import { payments } from "@shared/schema";
 import { eq, and, lt, isNotNull, or } from "drizzle-orm";
 import { dispatchWebhook } from "./webhookService";
 import { verifyTransaction, getExplorerLink, getBlockTimestamp } from "./arcService";
+import { recordPaymentProofOnChain } from "./contractService";
 import { DEMO_MODE } from "../config";
 
 export interface CreatePaymentRequest {
@@ -18,6 +19,7 @@ export interface CreatePaymentRequest {
   customerEmail?: string;
   merchantWallet: string;
   expiresInMinutes?: number;
+  isTest?: boolean;
 }
 
 /**
@@ -39,6 +41,7 @@ export async function createPayment(request: CreatePaymentRequest) {
       customerEmail: request.customerEmail,
       merchantWallet: request.merchantWallet,
       isDemo: false, // Real payments only - no demo mode
+      isTest: request.isTest !== undefined ? request.isTest : true, // Default to test mode only if not provided
       expiresAt,
     })
     .returning();
@@ -106,10 +109,71 @@ export async function confirmPayment(paymentId: string, txHash: string, payerWal
     .from(payments)
     .where(eq(payments.id, paymentId));
 
+  // Update treasury balance when payment is confirmed
+  if (updatedPayment) {
+    try {
+      const { storage } = await import("../storage");
+      const treasuryBalance = await storage.getTreasuryBalance(
+        updatedPayment.merchantId,
+        updatedPayment.currency
+      );
+
+      if (treasuryBalance) {
+        const newBalance = (
+          parseFloat(treasuryBalance.balance) + parseFloat(updatedPayment.amount)
+        ).toString();
+        await storage.updateTreasuryBalance(treasuryBalance.id, {
+          balance: newBalance,
+        });
+      } else {
+        // Create treasury balance if it doesn't exist
+        await storage.createTreasuryBalance({
+          merchantId: updatedPayment.merchantId,
+          currency: updatedPayment.currency,
+          balance: updatedPayment.amount,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to update treasury balance:", error);
+      // Don't throw - balance update should not block payment confirmation
+    }
+
+    // Auto-create invoice from payment if customerEmail is provided
+    if (updatedPayment.customerEmail) {
+      try {
+        const { storage } = await import("../storage");
+        // Check if invoice already exists for this payment
+        const existingInvoices = await storage.getInvoices(updatedPayment.merchantId);
+        const existingInvoice = existingInvoices.find(inv => inv.paymentId === updatedPayment.id);
+        
+        if (!existingInvoice) {
+          // Generate invoice number
+          const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${updatedPayment.id.slice(0, 8).toUpperCase()}`;
+          
+          // Create invoice from payment
+          await storage.createInvoice({
+            merchantId: updatedPayment.merchantId,
+            paymentId: updatedPayment.id,
+            invoiceNumber,
+            amount: updatedPayment.amount,
+            currency: updatedPayment.currency,
+            customerEmail: updatedPayment.customerEmail,
+            customerName: null, // Can be extracted from metadata if available
+            description: updatedPayment.description || `Payment for ${updatedPayment.amount} ${updatedPayment.currency}`,
+            status: "paid", // Mark as paid since payment is confirmed
+          });
+        }
+      } catch (error) {
+        console.error("Failed to auto-create invoice from payment:", error);
+        // Don't throw - invoice creation should not block payment confirmation
+      }
+    }
+  }
+
   // Dispatch webhook
   if (updatedPayment) {
-    await dispatchWebhook(payment.merchantId, "payment.confirmed", {
-      type: "payment.confirmed",
+    const webhookPayload = {
+      type: "payment.succeeded",
       data: {
         id: updatedPayment.id,
         amount: updatedPayment.amount,
@@ -120,6 +184,21 @@ export async function confirmPayment(paymentId: string, txHash: string, payerWal
         explorerLink: getExplorerLink(txHash),
         settlementTime,
       },
+    };
+
+    // Dispatch both payment.succeeded (primary) and payment.confirmed (for backward compatibility)
+    await Promise.all([
+      dispatchWebhook(payment.merchantId, "payment.succeeded", webhookPayload),
+      dispatchWebhook(payment.merchantId, "payment.confirmed", {
+        ...webhookPayload,
+        type: "payment.confirmed",
+      }),
+    ]);
+
+    // Record payment proof on-chain (non-blocking)
+    recordPaymentProofOnChain(updatedPayment).catch((error) => {
+      console.error("Failed to record payment proof on-chain:", error);
+      // Don't throw - proof recording should not block payment confirmation
     });
   }
 
@@ -204,15 +283,74 @@ export async function expirePayment(paymentId: string) {
 }
 
 /**
+ * Check if an error is a database connection error
+ */
+function isConnectionError(error: any): boolean {
+  if (!error) return false;
+  const message = error.message?.toLowerCase() || "";
+  const code = error.code?.toLowerCase() || "";
+  
+  return (
+    message.includes("connection terminated") ||
+    message.includes("connection closed") ||
+    message.includes("connection refused") ||
+    message.includes("connection reset") ||
+    message.includes("econnreset") ||
+    message.includes("econnrefused") ||
+    message.includes("etimedout") ||
+    code === "econnreset" ||
+    code === "econnrefused" ||
+    code === "etimedout" ||
+    code === "57p01" || // PostgreSQL: terminating connection due to administrator command
+    code === "57p02" || // PostgreSQL: terminating connection due to crash
+    code === "57p03" || // PostgreSQL: terminating connection due to idle timeout
+    code === "08003" || // PostgreSQL: connection does not exist
+    code === "08006"    // PostgreSQL: connection failure
+  );
+}
+
+/**
+ * Retry a database operation with exponential backoff
+ */
+async function retryDbOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries = 3,
+  initialDelay = 1000
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      
+      if (!isConnectionError(error) || attempt === maxRetries - 1) {
+        throw error;
+      }
+      
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = initialDelay * Math.pow(2, attempt);
+      console.warn(`Database connection error (attempt ${attempt + 1}/${maxRetries}), retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
+/**
  * Background service: Check pending payments and verify transactions
  */
 export async function checkPendingPayments() {
   try {
     // Get all pending payments with txHash (skip demo payments)
-    const allPendingPayments = await db
-      .select()
-      .from(payments)
-      .where(eq(payments.status, "pending"));
+    const allPendingPayments = await retryDbOperation(() =>
+      db
+        .select()
+        .from(payments)
+        .where(eq(payments.status, "pending"))
+    );
 
     const pendingPayments = allPendingPayments.filter((p) => p.txHash && !p.isDemo);
 
@@ -241,7 +379,9 @@ export async function checkPendingPayments() {
 
     // Check for expired payments
     const now = new Date();
-    const allPayments = await db.select().from(payments);
+    const allPayments = await retryDbOperation(() =>
+      db.select().from(payments)
+    );
     const expiredPayments = allPayments.filter(
       (p) =>
         p.expiresAt &&
@@ -258,7 +398,12 @@ export async function checkPendingPayments() {
       }
     }
   } catch (error) {
-    console.error("Error in payment checker:", error);
+    // Only log if it's not a connection error (connection errors are expected and will retry)
+    if (!isConnectionError(error)) {
+      console.error("Error in payment checker:", error);
+    } else {
+      console.warn("Database connection error in payment checker, will retry on next interval");
+    }
   }
 }
 

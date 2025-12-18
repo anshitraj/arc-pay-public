@@ -10,6 +10,7 @@ import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { getExplorerLink } from "@/lib/arc";
 import type { Payment, Refund } from "@shared/schema";
+import { PaymentProofRecord } from "@/components/PaymentProofRecord";
 
 function getStatusBadge(status: string) {
   const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
@@ -170,6 +171,10 @@ export default function DashboardPaymentDetails() {
                   </div>
                 </CardContent>
               </Card>
+
+              {payment.status === "confirmed" && (
+                <PaymentProofRecord payment={payment} />
+              )}
 
               {canRefund && (
                 <Card>

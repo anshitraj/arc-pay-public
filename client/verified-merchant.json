@@ -1,0 +1,23 @@
+{
+  "name": "Verified Merchant",
+  "description": "This badge certifies that the holder is a verified merchant using ArcPayKit on ARC Network.",
+  "image": "ipfs://bafkreiapbixzuvvrewbfzuku3r4ixxrlhr75yjd734ugedwfmt66ulp4ya",
+  "attributes": [
+    {
+      "trait_type": "Type",
+      "value": "Merchant Verification"
+    },
+    {
+      "trait_type": "Network",
+      "value": "ARC Testnet"
+    },
+    {
+      "trait_type": "Issuer",
+      "value": "ArcPayKit"
+    },
+    {
+      "trait_type": "Transferable",
+      "value": "No"
+    }
+  ]
+}

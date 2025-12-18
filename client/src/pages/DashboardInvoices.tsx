@@ -38,6 +38,7 @@ import { Plus, Loader2, FileText } from "lucide-react";
 import type { Invoice } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { TestModeToggle } from "@/components/TestModeToggle";
 
 const invoiceSchema = z.object({
   amount: z.string().min(1).refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0),
@@ -119,13 +120,15 @@ export default function DashboardInvoices() {
                 <p className="text-sm text-muted-foreground">Create and manage invoices</p>
               </div>
             </div>
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2" data-testid="button-create-invoice">
-                  <Plus className="w-4 h-4" />
-                  Create Invoice
-                </Button>
-              </DialogTrigger>
+            <div className="flex items-center gap-3">
+              <TestModeToggle />
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2" data-testid="button-create-invoice">
+                    <Plus className="w-4 h-4" />
+                    Create Invoice
+                  </Button>
+                </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Create Invoice</DialogTitle>
@@ -196,6 +199,7 @@ export default function DashboardInvoices() {
                 </Form>
               </DialogContent>
             </Dialog>
+            </div>
           </header>
 
           <main className="flex-1 overflow-auto p-4 lg:p-6">

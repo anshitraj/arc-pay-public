@@ -1,13 +1,16 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { TestModeToggle } from "@/components/TestModeToggle";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Wallet, RefreshCw, ArrowRightLeft, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { Payment } from "@shared/schema";
 import type { TreasuryBalance } from "@shared/schema";
-import { useToast } from "@/hooks/use-toast";
+import { useTestMode } from "@/hooks/useTestMode";
 import { apiRequest } from "@/lib/queryClient";
+import { RefreshCw } from "lucide-react";
+import { useState } from "react";
 
 const currencyInfo: Record<string, { color: string; symbol: string }> = {
   USDC: { color: "bg-blue-500", symbol: "$" },
@@ -15,30 +18,48 @@ const currencyInfo: Record<string, { color: string; symbol: string }> = {
 };
 
 export default function DashboardTreasury() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { testMode } = useTestMode();
+  const [isRebalancing, setIsRebalancing] = useState(false);
 
-  const { data: balances = [], isLoading } = useQuery<TreasuryBalance[]>({
+  const { data: payments = [], refetch: refetchPayments } = useQuery<Payment[]>({
+    queryKey: ["/api/payments"],
+  });
+
+  const { data: treasuryBalances = [], refetch: refetchBalances } = useQuery<TreasuryBalance[]>({
     queryKey: ["/api/treasury"],
   });
 
-  const rebalanceMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("POST", "/api/treasury/rebalance", {});
-    },
-    onSuccess: () => {
-      toast({ title: "Rebalance Initiated", description: "Treasury rebalance has been initiated." });
-      queryClient.invalidateQueries({ queryKey: ["/api/treasury"] });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to initiate rebalance", variant: "destructive" });
-    },
-  });
+  // Filter payments by test mode
+  const filteredPayments = payments.filter((p) => 
+    p.isTest === testMode || p.isTest === undefined
+  );
 
-  const totalUSD = balances.reduce((sum, b) => {
-    const amount = parseFloat(b.balance);
-    return sum + (b.currency === "EURC" ? amount * 1.08 : amount);
-  }, 0);
+  // Get USDC balance from treasury (more accurate)
+  const usdcBalance = treasuryBalances.find((b) => b.currency === "USDC");
+  const availableBalance = usdcBalance ? parseFloat(usdcBalance.balance) : 0;
+
+  // Calculate incoming (pending) vs available (confirmed)
+  const confirmedPayments = filteredPayments.filter((p) => p.status === "confirmed");
+  const pendingPayments = filteredPayments.filter((p) => p.status === "pending" || p.status === "created");
+  
+  // Fallback: calculate from payments if treasury balance not available
+  const calculatedBalance = confirmedPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+  const displayBalance = availableBalance > 0 ? availableBalance : calculatedBalance;
+  const incomingBalance = pendingPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+
+  const handleRebalance = async () => {
+    setIsRebalancing(true);
+    try {
+      await apiRequest("POST", "/api/treasury/rebalance", {});
+      await refetchBalances();
+      await refetchPayments();
+    } catch (error) {
+      console.error("Failed to rebalance:", error);
+    } finally {
+      setIsRebalancing(false);
+    }
+  };
+
 
   const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
 
@@ -51,122 +72,93 @@ export default function DashboardTreasury() {
             <div className="flex items-center gap-4">
               <SidebarTrigger />
               <div>
-                <h1 className="text-xl font-semibold">Treasury</h1>
-                <p className="text-sm text-muted-foreground">Manage your stablecoin balances</p>
+                <h1 className="text-xl font-semibold">Balances</h1>
+                <p className="text-sm text-muted-foreground">View your USDC balance and activity</p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => rebalanceMutation.mutate()}
-              disabled={rebalanceMutation.isPending}
-              data-testid="button-rebalance"
-            >
-              {rebalanceMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <ArrowRightLeft className="w-4 h-4" />
-              )}
-              Rebalance
-            </Button>
+            <TestModeToggle />
           </header>
 
           <main className="flex-1 overflow-auto p-4 lg:p-6">
             <div className="max-w-7xl mx-auto space-y-6">
-              <Card className="bg-gradient-to-br from-primary/20 via-card to-card border-primary/20">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Total Balance (USD)</p>
-                      <div className="text-4xl font-bold tracking-tight">
-                        ${totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="bg-green-500/20 text-green-500 border-green-500/30">
-                        <TrendingUp className="w-3 h-3 mr-1" />
-                        +5.2% this month
-                      </Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {isLoading ? (
-                  [...Array(3)].map((_, i) => (
-                    <Card key={i} className="bg-card/50">
-                      <CardContent className="p-6">
-                        <div className="animate-pulse space-y-3">
-                          <div className="w-12 h-12 rounded-xl bg-muted" />
-                          <div className="w-24 h-8 bg-muted rounded" />
-                          <div className="w-16 h-4 bg-muted rounded" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                ) : balances.length === 0 ? (
-                  <Card className="bg-card/50 col-span-full">
-                    <CardContent className="p-12 text-center">
-                      <Wallet className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">No treasury balances yet</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Balances will appear after you receive payments
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  balances.map((balance) => {
-                    const info = currencyInfo[balance.currency] || { color: "bg-gray-500", symbol: "" };
-                    const amount = parseFloat(balance.balance);
-                    return (
-                      <Card key={balance.id} className="bg-card/50" data-testid={`balance-${balance.currency}`}>
-                        <CardContent className="p-6">
-                          <div className="flex items-start justify-between gap-4 mb-4">
-                            <div className={`w-12 h-12 rounded-xl ${info.color}/10 flex items-center justify-center`}>
-                              <span className={`text-lg font-bold ${info.color.replace("bg-", "text-")}`}>
-                                {info.symbol}
-                              </span>
-                            </div>
-                            <Badge variant="outline">{balance.currency}</Badge>
-                          </div>
-                          <div className="text-3xl font-bold tracking-tight mb-1">
-                            {amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {balance.currency} Balance
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })
-                )}
-              </div>
-
-              <Card className="bg-card/50">
+              {/* USDC Balance Card */}
+              <Card>
                 <CardHeader>
-                  <CardTitle>Treasury Management</CardTitle>
-                  <CardDescription>
-                    Automatic rebalancing and FX conversion for your stablecoin holdings
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>USDC Balance</CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRebalance}
+                      disabled={isRebalancing}
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${isRebalancing ? "animate-spin" : ""}`} />
+                      Sync Balance
+                    </Button>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="p-4 bg-background/50 rounded-lg">
-                      <h4 className="font-medium mb-2">Auto-Rebalance</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Automatically convert between stablecoins based on your configured ratios
-                      </p>
+                <CardContent>
+                  <div className="text-4xl font-bold mb-4">
+                    ${displayBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Available</p>
+                      <p className="font-medium">${displayBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="p-4 bg-background/50 rounded-lg">
-                      <h4 className="font-medium mb-2">FX Conversion</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Convert between USDC and EURC at competitive rates
-                      </p>
+                    <div>
+                      <p className="text-muted-foreground">Incoming</p>
+                      <p className="font-medium">${incomingBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Recent Activity */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Activity</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {filteredPayments.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No recent payments
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredPayments.slice(0, 5).map((payment) => (
+                        <div key={payment.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                          <div>
+                            <p className="font-medium">
+                              ${parseFloat(payment.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} {payment.currency}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {payment.description || "Payment"}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <Badge
+                              variant={
+                                payment.status === "confirmed"
+                                  ? "default"
+                                  : payment.status === "failed"
+                                  ? "destructive"
+                                  : "secondary"
+                              }
+                            >
+                              {payment.status}
+                            </Badge>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(payment.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
             </div>
           </main>
         </div>

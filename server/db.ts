@@ -26,6 +26,33 @@ if (!process.env.DATABASE_URL) {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  // Connection pool configuration
+  max: 20, // Maximum number of clients in the pool
+  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+  connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection could not be established
+  // Keep connections alive
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
+});
+
+// Handle pool errors gracefully
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle database client:", err);
+  // Don't exit the process, just log the error
+  // The pool will handle reconnection automatically
+});
+
+// Handle connection errors
+pool.on("connect", () => {
+  // Connection established successfully
+});
+
+pool.on("acquire", () => {
+  // Client acquired from pool
+});
+
+pool.on("remove", () => {
+  // Client removed from pool
 });
 
 export const db = drizzle(pool, { schema });

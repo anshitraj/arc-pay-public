@@ -6,7 +6,7 @@ import { z } from "zod";
 
 export const paymentStatusEnum = pgEnum("payment_status", ["created", "pending", "confirmed", "failed", "refunded", "expired"]);
 export const invoiceStatusEnum = pgEnum("invoice_status", ["draft", "sent", "paid", "overdue", "cancelled"]);
-export const webhookEventTypeEnum = pgEnum("webhook_event_type", ["payment.created", "payment.confirmed", "payment.failed", "payment.refunded", "invoice.created", "invoice.paid"]);
+export const webhookEventTypeEnum = pgEnum("webhook_event_type", ["payment.created", "payment.confirmed", "payment.succeeded", "payment.failed", "payment.refunded", "invoice.created", "invoice.paid"]);
 export const webhookEventStatusEnum = pgEnum("webhook_event_status", ["pending", "delivered", "failed"]);
 
 export const users = pgTable("users", {
@@ -41,7 +41,8 @@ export const payments = pgTable("payments", {
   txHash: text("tx_hash"),
   settlementTime: integer("settlement_time"),
   metadata: text("metadata"),
-  isDemo: boolean("is_demo").default(false).notNull(),
+  isDemo: boolean("is_demo").default(false).notNull(), // Legacy field, keep for compatibility
+  isTest: boolean("is_test").default(true).notNull(), // Test mode flag
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -115,6 +116,86 @@ export const treasuryBalances = pgTable("treasury_balances", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const merchantBadges = pgTable("merchant_badges", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  merchantId: varchar("merchant_id").notNull().references(() => merchants.id).unique(),
+  tokenId: varchar("token_id"),
+  mintTxHash: text("mint_tx_hash"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const paymentProofs = pgTable("payment_proofs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  paymentId: varchar("payment_id").notNull().references(() => payments.id),
+  invoiceHash: text("invoice_hash").notNull().unique(),
+  proofTxHash: text("proof_tx_hash"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const paymentLinks = pgTable("payment_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  merchantId: varchar("merchant_id").notNull().references(() => merchants.id),
+  paymentId: varchar("payment_id").notNull().references(() => payments.id),
+  isTest: boolean("is_test").default(true).notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const qrCodes = pgTable("qr_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  merchantId: varchar("merchant_id").notNull().references(() => merchants.id),
+  amountType: text("amount_type").notNull().default("open"), // "fixed" or "open"
+  amount: decimal("amount", { precision: 18, scale: 6 }), // null for open amount
+  description: text("description"),
+  isTest: boolean("is_test").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const customers = pgTable("customers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  merchantId: varchar("merchant_id").notNull().references(() => merchants.id),
+  email: text("email").notNull(),
+  name: text("name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const merchantProfiles = pgTable("merchant_profiles", {
+  walletAddress: text("wallet_address").primaryKey(),
+  businessName: text("business_name").notNull(),
+  logoUrl: text("logo_url"),
+  country: text("country"),
+  businessType: text("business_type"), // "unregistered", "registered", "nonprofit"
+  activatedAt: timestamp("activated_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const businessWalletAddresses = pgTable("business_wallet_addresses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  walletAddress: text("wallet_address").notNull(), // Merchant's wallet address (FK to merchant_profiles)
+  paymentWalletAddress: text("payment_wallet_address").notNull(), // Wallet address to receive payments
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const apiKeyTypeEnum = pgEnum("api_key_type", ["publishable", "secret"]);
+export const apiKeyModeEnum = pgEnum("api_key_mode", ["test", "live"]);
+export const adminRoleEnum = pgEnum("admin_role", ["SUPER_ADMIN", "ADMIN", "SUPPORT"]);
+export const changeRequestStatusEnum = pgEnum("change_request_status", ["pending", "approved", "rejected"]);
+
+export const apiKeys = pgTable("api_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  walletAddress: text("wallet_address").notNull(), // Wallet-scoped keys
+  keyType: apiKeyTypeEnum("key_type").notNull(),
+  mode: apiKeyModeEnum("mode").notNull(),
+  keyPrefix: text("key_prefix").notNull(), // e.g., "pk_arc_test_" or "sk_arc_live_"
+  hashedKey: text("hashed_key").notNull(), // Only for secret keys, publishable keys stored in plaintext prefix
+  name: text("name"), // Optional name for the API key
+  lastUsedAt: timestamp("last_used_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   merchants: many(merchants),
 }));
@@ -125,11 +206,13 @@ export const merchantsRelations = relations(merchants, ({ one, many }) => ({
   invoices: many(invoices),
   webhookEndpoints: many(webhookEndpoints),
   treasuryBalances: many(treasuryBalances),
+  badge: one(merchantBadges, { fields: [merchants.id], references: [merchantBadges.merchantId] }),
 }));
 
 export const paymentsRelations = relations(payments, ({ one, many }) => ({
   merchant: one(merchants, { fields: [payments.merchantId], references: [merchants.id] }),
   refunds: many(refunds),
+  proof: one(paymentProofs, { fields: [payments.id], references: [paymentProofs.paymentId] }),
 }));
 
 export const refundsRelations = relations(refunds, ({ one }) => ({
@@ -155,6 +238,99 @@ export const treasuryBalancesRelations = relations(treasuryBalances, ({ one }) =
   merchant: one(merchants, { fields: [treasuryBalances.merchantId], references: [merchants.id] }),
 }));
 
+export const merchantBadgesRelations = relations(merchantBadges, ({ one }) => ({
+  merchant: one(merchants, { fields: [merchantBadges.merchantId], references: [merchants.id] }),
+}));
+
+export const paymentProofsRelations = relations(paymentProofs, ({ one }) => ({
+  payment: one(payments, { fields: [paymentProofs.paymentId], references: [payments.id] }),
+}));
+
+export const paymentLinksRelations = relations(paymentLinks, ({ one }) => ({
+  merchant: one(merchants, { fields: [paymentLinks.merchantId], references: [merchants.id] }),
+  payment: one(payments, { fields: [paymentLinks.paymentId], references: [payments.id] }),
+}));
+
+export const customersRelations = relations(customers, ({ one }) => ({
+  merchant: one(merchants, { fields: [customers.merchantId], references: [merchants.id] }),
+}));
+
+export const merchantProfilesRelations = relations(merchantProfiles, ({ many }) => ({
+  paymentWallets: many(businessWalletAddresses),
+}));
+
+export const businessWalletAddressesRelations = relations(businessWalletAddresses, ({ one }) => ({
+  merchant: one(merchantProfiles, { fields: [businessWalletAddresses.walletAddress], references: [merchantProfiles.walletAddress] }),
+}));
+
+// Admin Users
+export const adminUsers = pgTable("admin_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  name: text("name").notNull(),
+  walletAddress: text("wallet_address").unique(),
+  role: adminRoleEnum("role").notNull().default("ADMIN"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastLoginAt: timestamp("last_login_at"),
+});
+
+// Business Name Change Requests
+export const businessNameChangeRequests = pgTable("business_name_change_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  merchantId: varchar("merchant_id").notNull().references(() => merchants.id),
+  currentName: text("current_name").notNull(),
+  requestedName: text("requested_name").notNull(),
+  reason: text("reason"),
+  status: changeRequestStatusEnum("status").notNull().default("pending"),
+  reviewedBy: varchar("reviewed_by").references(() => adminUsers.id),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Admin Audit Logs
+export const adminAuditLogs = pgTable("admin_audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminId: varchar("admin_id").notNull().references(() => adminUsers.id),
+  action: text("action").notNull(), // e.g., "merchant.approved", "badge.issued", "config.updated"
+  entityType: text("entity_type"), // "merchant", "payment", "config", etc.
+  entityId: text("entity_id"),
+  metadata: text("metadata"), // JSON string for additional data
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Global Config
+export const globalConfig = pgTable("global_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  description: text("description"),
+  updatedBy: varchar("updated_by").references(() => adminUsers.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Blocklist
+export const blocklist = pgTable("blocklist", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull(), // "wallet", "merchant", "email"
+  value: text("value").notNull(),
+  reason: text("reason"),
+  blockedBy: varchar("blocked_by").notNull().references(() => adminUsers.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const merchantsRelationsWithCustomers = relations(merchants, ({ many }) => ({
+  customers: many(customers),
+  paymentLinks: many(paymentLinks),
+  qrCodes: many(qrCodes),
+}));
+
+export const qrCodesRelations = relations(qrCodes, ({ one }) => ({
+  merchant: one(merchants, { fields: [qrCodes.merchantId], references: [merchants.id] }),
+}));
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertMerchantSchema = createInsertSchema(merchants).omit({ id: true, createdAt: true });
 export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, createdAt: true, updatedAt: true });
@@ -164,6 +340,14 @@ export const insertWebhookEventSchema = createInsertSchema(webhookEvents).omit({
 export const insertTreasuryBalanceSchema = createInsertSchema(treasuryBalances).omit({ id: true, updatedAt: true });
 export const insertRefundSchema = createInsertSchema(refunds).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertWebhookSubscriptionSchema = createInsertSchema(webhookSubscriptions).omit({ id: true, createdAt: true });
+export const insertMerchantBadgeSchema = createInsertSchema(merchantBadges).omit({ id: true, createdAt: true });
+export const insertPaymentProofSchema = createInsertSchema(paymentProofs).omit({ id: true, createdAt: true });
+export const insertPaymentLinkSchema = createInsertSchema(paymentLinks).omit({ id: true, createdAt: true });
+export const insertQRCodeSchema = createInsertSchema(qrCodes).omit({ id: true, createdAt: true });
+export const insertApiKeySchema = createInsertSchema(apiKeys).omit({ id: true, createdAt: true });
+export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertMerchantProfileSchema = createInsertSchema(merchantProfiles).omit({ createdAt: true, updatedAt: true });
+export const insertBusinessWalletAddressSchema = createInsertSchema(businessWalletAddresses).omit({ id: true, createdAt: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -183,3 +367,31 @@ export type InsertRefund = z.infer<typeof insertRefundSchema>;
 export type Refund = typeof refunds.$inferSelect;
 export type InsertWebhookSubscription = z.infer<typeof insertWebhookSubscriptionSchema>;
 export type WebhookSubscription = typeof webhookSubscriptions.$inferSelect;
+export type InsertMerchantBadge = z.infer<typeof insertMerchantBadgeSchema>;
+export type MerchantBadge = typeof merchantBadges.$inferSelect;
+export type InsertPaymentProof = z.infer<typeof insertPaymentProofSchema>;
+export type PaymentProof = typeof paymentProofs.$inferSelect;
+export type InsertPaymentLink = z.infer<typeof insertPaymentLinkSchema>;
+export type PaymentLink = typeof paymentLinks.$inferSelect;
+export type InsertQRCode = z.infer<typeof insertQRCodeSchema>;
+export type QRCode = typeof qrCodes.$inferSelect;
+export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type Customer = typeof customers.$inferSelect;
+export type InsertMerchantProfile = z.infer<typeof insertMerchantProfileSchema>;
+export type MerchantProfile = typeof merchantProfiles.$inferSelect;
+export type BusinessWalletAddress = typeof businessWalletAddresses.$inferSelect;
+export type InsertBusinessWalletAddress = z.infer<typeof insertBusinessWalletAddressSchema>;
+
+// Admin types
+export type AdminUser = typeof adminUsers.$inferSelect;
+export type InsertAdminUser = typeof adminUsers.$inferInsert;
+export type BusinessNameChangeRequest = typeof businessNameChangeRequests.$inferSelect;
+export type InsertBusinessNameChangeRequest = typeof businessNameChangeRequests.$inferInsert;
+export type AdminAuditLog = typeof adminAuditLogs.$inferSelect;
+export type InsertAdminAuditLog = typeof adminAuditLogs.$inferInsert;
+export type GlobalConfig = typeof globalConfig.$inferSelect;
+export type InsertGlobalConfig = typeof globalConfig.$inferInsert;
+export type BlocklistEntry = typeof blocklist.$inferSelect;
+export type InsertBlocklistEntry = typeof blocklist.$inferInsert;

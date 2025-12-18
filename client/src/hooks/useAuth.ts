@@ -12,6 +12,7 @@ export interface AuthMerchant {
   id: string;
   name: string;
   apiKey: string;
+  walletAddress?: string | null;
 }
 
 export interface AuthData {

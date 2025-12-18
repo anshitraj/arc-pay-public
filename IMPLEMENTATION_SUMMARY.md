@@ -179,7 +179,8 @@ This document summarizes the full ARC Payment Gateway implementation.
 
 ## 🔗 ARC Testnet Integration
 
-- Chain ID: 1243 (configurable via env)
+- Chain ID: 5042002 (configurable via env)
+- **Note:** ARC uses USDC for gas fees (not ETH)
 - RPC URL: Configurable via `ARC_RPC_URL`
 - Explorer: Configurable via `ARC_EXPLORER_URL`
 - Transaction verification via RPC
@@ -194,9 +195,9 @@ This document summarizes the full ARC Payment Gateway implementation.
 DATABASE_URL=postgresql://...
 PORT=3000
 SESSION_SECRET=...
-ARC_CHAIN_ID=1243
-ARC_RPC_URL=https://rpc-testnet.arc.network
-ARC_EXPLORER_URL=https://testnet-explorer.arc.network/tx
+ARC_CHAIN_ID=5042002
+ARC_RPC_URL=https://rpc.testnet.arc.network
+ARC_EXPLORER_URL=https://testnet.arcscan.app/tx
 DEMO_MODE=true
 ```
 
@@ -204,8 +205,9 @@ DEMO_MODE=true
 ```
 VITE_WALLETCONNECT_PROJECT_ID=...
 VITE_API_URL=http://localhost:3000
-VITE_ARC_CHAIN_ID=1243
-VITE_ARC_EXPLORER_URL=https://testnet-explorer.arc.network/tx
+VITE_ARC_CHAIN_ID=5042002
+VITE_ARC_RPC_URL=https://rpc.testnet.arc.network
+VITE_ARC_EXPLORER_URL=https://testnet.arcscan.app/tx
 ```
 
 ---

@@ -1,4 +1,4 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, isNull } from "drizzle-orm";
 import { db } from "./db";
 import {
   users,
@@ -10,6 +10,17 @@ import {
   treasuryBalances,
   refunds,
   webhookSubscriptions,
+  merchantBadges,
+  paymentProofs,
+  merchantProfiles,
+  businessWalletAddresses,
+  qrCodes,
+  apiKeys,
+  businessNameChangeRequests,
+  adminUsers,
+  adminAuditLogs,
+  globalConfig,
+  blocklist,
   type User,
   type InsertUser,
   type Merchant,
@@ -28,6 +39,28 @@ import {
   type InsertRefund,
   type WebhookSubscription,
   type InsertWebhookSubscription,
+  type MerchantBadge,
+  type InsertMerchantBadge,
+  type PaymentProof,
+  type InsertPaymentProof,
+  type MerchantProfile,
+  type InsertMerchantProfile,
+  type BusinessWalletAddress,
+  type InsertBusinessWalletAddress,
+  type QRCode,
+  type InsertQRCode,
+  type ApiKey,
+  type InsertApiKey,
+  type BusinessNameChangeRequest,
+  type InsertBusinessNameChangeRequest,
+  type AdminUser,
+  type InsertAdminUser,
+  type AdminAuditLog,
+  type InsertAdminAuditLog,
+  type GlobalConfig,
+  type InsertGlobalConfig,
+  type BlocklistEntry,
+  type InsertBlocklistEntry,
 } from "@shared/schema";
 import { randomBytes } from "crypto";
 
@@ -93,6 +126,11 @@ export class DatabaseStorage implements IStorage {
 
   async getMerchantByApiKey(apiKey: string): Promise<Merchant | undefined> {
     const [merchant] = await db.select().from(merchants).where(eq(merchants.apiKey, apiKey));
+    return merchant;
+  }
+
+  async getMerchantByWalletAddress(walletAddress: string): Promise<Merchant | undefined> {
+    const [merchant] = await db.select().from(merchants).where(eq(merchants.walletAddress, walletAddress.toLowerCase()));
     return merchant;
   }
 
@@ -277,6 +315,349 @@ export class ExtendedStorage extends DatabaseStorage {
   async deleteWebhookSubscription(id: string): Promise<boolean> {
     await db.delete(webhookSubscriptions).where(eq(webhookSubscriptions.id, id));
     return true;
+  }
+
+  async getMerchantBadge(merchantId: string): Promise<MerchantBadge | undefined> {
+    const [badge] = await db.select().from(merchantBadges).where(eq(merchantBadges.merchantId, merchantId));
+    return badge;
+  }
+
+  async createMerchantBadge(insertBadge: InsertMerchantBadge): Promise<MerchantBadge> {
+    const [badge] = await db.insert(merchantBadges).values(insertBadge).returning();
+    return badge;
+  }
+
+  async updateMerchantBadge(merchantId: string, updates: Partial<MerchantBadge>): Promise<MerchantBadge | undefined> {
+    const [badge] = await db.update(merchantBadges).set(updates).where(eq(merchantBadges.merchantId, merchantId)).returning();
+    return badge;
+  }
+
+  async getPaymentProof(paymentId: string): Promise<PaymentProof | undefined> {
+    const [proof] = await db.select().from(paymentProofs).where(eq(paymentProofs.paymentId, paymentId));
+    return proof;
+  }
+
+  async getPaymentProofByInvoiceHash(invoiceHash: string): Promise<PaymentProof | undefined> {
+    const [proof] = await db.select().from(paymentProofs).where(eq(paymentProofs.invoiceHash, invoiceHash));
+    return proof;
+  }
+
+  async createPaymentProof(insertProof: InsertPaymentProof): Promise<PaymentProof> {
+    const [proof] = await db.insert(paymentProofs).values(insertProof).returning();
+    return proof;
+  }
+
+  async updatePaymentProof(id: string, updates: Partial<PaymentProof>): Promise<PaymentProof | undefined> {
+    const [proof] = await db.update(paymentProofs).set(updates).where(eq(paymentProofs.id, id)).returning();
+    return proof;
+  }
+
+  async getMerchantProfile(walletAddress: string): Promise<MerchantProfile | undefined> {
+    const [profile] = await db
+      .select()
+      .from(merchantProfiles)
+      .where(eq(merchantProfiles.walletAddress, walletAddress.toLowerCase()));
+    return profile;
+  }
+
+  async upsertMerchantProfile(profile: InsertMerchantProfile): Promise<MerchantProfile> {
+    const normalizedWalletAddress = profile.walletAddress.toLowerCase();
+    const existing = await this.getMerchantProfile(normalizedWalletAddress);
+    
+    if (existing) {
+      const [result] = await db
+        .update(merchantProfiles)
+        .set({
+          businessName: profile.businessName,
+          logoUrl: profile.logoUrl,
+          country: profile.country,
+          businessType: profile.businessType,
+          activatedAt: profile.activatedAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(merchantProfiles.walletAddress, normalizedWalletAddress))
+        .returning();
+      return result;
+    } else {
+      const [result] = await db
+        .insert(merchantProfiles)
+        .values({
+          ...profile,
+          walletAddress: normalizedWalletAddress,
+          updatedAt: new Date(),
+        })
+        .returning();
+      return result;
+    }
+  }
+
+  // Business Wallet Addresses
+  async getBusinessWalletAddresses(walletAddress: string): Promise<BusinessWalletAddress[]> {
+    return await db
+      .select()
+      .from(businessWalletAddresses)
+      .where(eq(businessWalletAddresses.walletAddress, walletAddress.toLowerCase()))
+      .orderBy(desc(businessWalletAddresses.createdAt));
+  }
+
+  async createBusinessWalletAddress(insertWallet: InsertBusinessWalletAddress): Promise<BusinessWalletAddress> {
+    // Check if we already have 3 wallet addresses
+    const existing = await this.getBusinessWalletAddresses(insertWallet.walletAddress);
+    if (existing.length >= 3) {
+      throw new Error("Maximum of 3 wallet addresses allowed");
+    }
+
+    // Validate wallet address format
+    const walletRegex = /^0x[a-fA-F0-9]{40}$/;
+    if (!walletRegex.test(insertWallet.paymentWalletAddress)) {
+      throw new Error("Invalid wallet address format");
+    }
+
+    // Check for duplicates
+    const duplicate = existing.find(
+      (w) => w.paymentWalletAddress.toLowerCase() === insertWallet.paymentWalletAddress.toLowerCase()
+    );
+    if (duplicate) {
+      throw new Error("This wallet address is already added");
+    }
+
+    const [wallet] = await db
+      .insert(businessWalletAddresses)
+      .values({
+        ...insertWallet,
+        walletAddress: insertWallet.walletAddress.toLowerCase(),
+        paymentWalletAddress: insertWallet.paymentWalletAddress.toLowerCase(),
+      })
+      .returning();
+    return wallet;
+  }
+
+  async deleteBusinessWalletAddress(id: string, walletAddress: string): Promise<boolean> {
+    const [deleted] = await db
+      .delete(businessWalletAddresses)
+      .where(
+        and(
+          eq(businessWalletAddresses.id, id),
+          eq(businessWalletAddresses.walletAddress, walletAddress.toLowerCase())
+        )
+      )
+      .returning();
+    return !!deleted;
+  }
+
+  async getQRCodes(merchantId: string): Promise<QRCode[]> {
+    return await db
+      .select()
+      .from(qrCodes)
+      .where(eq(qrCodes.merchantId, merchantId))
+      .orderBy(desc(qrCodes.createdAt));
+  }
+
+  async getQRCode(id: string): Promise<QRCode | undefined> {
+    const [qrCode] = await db.select().from(qrCodes).where(eq(qrCodes.id, id));
+    return qrCode;
+  }
+
+  async createQRCode(insertQRCode: InsertQRCode): Promise<QRCode> {
+    const [qrCode] = await db.insert(qrCodes).values(insertQRCode).returning();
+    return qrCode;
+  }
+
+  async getApiKeys(walletAddress: string): Promise<ApiKey[]> {
+    return await db
+      .select()
+      .from(apiKeys)
+      .where(
+        and(
+          eq(apiKeys.walletAddress, walletAddress.toLowerCase()),
+          isNull(apiKeys.revokedAt)
+        )
+      )
+      .orderBy(desc(apiKeys.createdAt));
+  }
+
+  async getApiKey(id: string): Promise<ApiKey | undefined> {
+    const [key] = await db.select().from(apiKeys).where(eq(apiKeys.id, id));
+    return key;
+  }
+
+  async createApiKey(insertApiKey: InsertApiKey): Promise<ApiKey> {
+    const [key] = await db.insert(apiKeys).values({
+      ...insertApiKey,
+      walletAddress: insertApiKey.walletAddress.toLowerCase(),
+    }).returning();
+    return key;
+  }
+
+  async revokeApiKey(id: string): Promise<void> {
+    await db
+      .update(apiKeys)
+      .set({ revokedAt: new Date() })
+      .where(eq(apiKeys.id, id));
+  }
+
+  async deleteApiKey(id: string): Promise<void> {
+    await db.delete(apiKeys).where(eq(apiKeys.id, id));
+  }
+
+  async getApiKeyFullValue(id: string): Promise<string | null> {
+    const key = await this.getApiKey(id);
+    if (!key) return null;
+    
+    // For MVP: Return the keyPrefix which contains the full key
+    // In production, implement proper encryption/decryption with a secure vault
+    // TODO: Implement secure key storage with encryption
+    return key.keyPrefix;
+  }
+
+  async logApiKeyEvent(data: { apiKeyId: string; eventType: string; metadata?: any }): Promise<void> {
+    // Log API key events for audit trail
+    // This could be stored in a separate api_key_events table
+    console.log("API Key Event:", data);
+  }
+
+  // Business Name Change Requests
+  async createBusinessNameChangeRequest(insertRequest: InsertBusinessNameChangeRequest): Promise<BusinessNameChangeRequest> {
+    const [request] = await db.insert(businessNameChangeRequests).values(insertRequest).returning();
+    return request;
+  }
+
+  async getBusinessNameChangeRequests(merchantId: string): Promise<BusinessNameChangeRequest[]> {
+    return await db
+      .select()
+      .from(businessNameChangeRequests)
+      .where(eq(businessNameChangeRequests.merchantId, merchantId))
+      .orderBy(desc(businessNameChangeRequests.createdAt));
+  }
+
+  async getAllBusinessNameChangeRequests(status?: "pending" | "approved" | "rejected"): Promise<BusinessNameChangeRequest[]> {
+    if (status) {
+      return await db
+        .select()
+        .from(businessNameChangeRequests)
+        .where(eq(businessNameChangeRequests.status, status))
+        .orderBy(desc(businessNameChangeRequests.createdAt));
+    }
+    return await db
+      .select()
+      .from(businessNameChangeRequests)
+      .orderBy(desc(businessNameChangeRequests.createdAt));
+  }
+
+  async getBusinessNameChangeRequest(id: string): Promise<BusinessNameChangeRequest | undefined> {
+    const [request] = await db
+      .select()
+      .from(businessNameChangeRequests)
+      .where(eq(businessNameChangeRequests.id, id));
+    return request;
+  }
+
+  async updateBusinessNameChangeRequest(id: string, updates: Partial<BusinessNameChangeRequest>): Promise<BusinessNameChangeRequest | undefined> {
+    const [request] = await db
+      .update(businessNameChangeRequests)
+      .set(updates)
+      .where(eq(businessNameChangeRequests.id, id))
+      .returning();
+    return request;
+  }
+
+  // Admin Users
+  async getAdminUser(id: string): Promise<AdminUser | undefined> {
+    const [admin] = await db.select().from(adminUsers).where(eq(adminUsers.id, id));
+    return admin;
+  }
+
+  async getAdminUserByEmail(email: string): Promise<AdminUser | undefined> {
+    const [admin] = await db.select().from(adminUsers).where(eq(adminUsers.email, email));
+    return admin;
+  }
+
+  async getAdminUserByWalletAddress(walletAddress: string): Promise<AdminUser | undefined> {
+    const [admin] = await db
+      .select()
+      .from(adminUsers)
+      .where(eq(adminUsers.walletAddress, walletAddress.toLowerCase()));
+    return admin;
+  }
+
+  async getAllAdminUsers(): Promise<AdminUser[]> {
+    return await db.select().from(adminUsers).orderBy(desc(adminUsers.createdAt));
+  }
+
+  async createAdminUser(insertAdmin: InsertAdminUser): Promise<AdminUser> {
+    const [admin] = await db.insert(adminUsers).values(insertAdmin).returning();
+    return admin;
+  }
+
+  // Admin Audit Logs
+  async createAuditLog(insertLog: InsertAdminAuditLog): Promise<AdminAuditLog> {
+    const [log] = await db.insert(adminAuditLogs).values(insertLog).returning();
+    return log;
+  }
+
+  async getAuditLogs(limit: number = 100): Promise<AdminAuditLog[]> {
+    return await db
+      .select()
+      .from(adminAuditLogs)
+      .orderBy(desc(adminAuditLogs.createdAt))
+      .limit(limit);
+  }
+
+  // Global Config
+  async getGlobalConfig(key: string): Promise<GlobalConfig | undefined> {
+    const [config] = await db.select().from(globalConfig).where(eq(globalConfig.key, key));
+    return config;
+  }
+
+  async getAllGlobalConfig(): Promise<GlobalConfig[]> {
+    return await db.select().from(globalConfig);
+  }
+
+  async upsertGlobalConfig(config: InsertGlobalConfig & { updatedBy: string }): Promise<GlobalConfig> {
+    const existing = await this.getGlobalConfig(config.key);
+    if (existing) {
+      const [updated] = await db
+        .update(globalConfig)
+        .set({
+          value: config.value,
+          description: config.description,
+          updatedBy: config.updatedBy,
+          updatedAt: new Date(),
+        })
+        .where(eq(globalConfig.key, config.key))
+        .returning();
+      return updated!;
+    } else {
+      const [created] = await db.insert(globalConfig).values(config).returning();
+      return created;
+    }
+  }
+
+  // Blocklist
+  async getBlocklistEntry(type: string, value: string): Promise<BlocklistEntry | undefined> {
+    const [entry] = await db
+      .select()
+      .from(blocklist)
+      .where(
+        and(eq(blocklist.type, type), eq(blocklist.value, value.toLowerCase()))
+      );
+    return entry;
+  }
+
+  async getAllBlocklistEntries(): Promise<BlocklistEntry[]> {
+    return await db.select().from(blocklist).orderBy(desc(blocklist.createdAt));
+  }
+
+  async createBlocklistEntry(insertEntry: InsertBlocklistEntry): Promise<BlocklistEntry> {
+    const [entry] = await db.insert(blocklist).values({
+      ...insertEntry,
+      value: insertEntry.value.toLowerCase(),
+    }).returning();
+    return entry;
+  }
+
+  async deleteBlocklistEntry(id: string): Promise<void> {
+    await db.delete(blocklist).where(eq(blocklist.id, id));
   }
 }
 

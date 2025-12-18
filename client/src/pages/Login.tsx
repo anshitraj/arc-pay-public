@@ -41,8 +41,17 @@ export default function Login() {
     },
   });
 
-  // Auto-authenticate when wallet connects
+  // Auto-authenticate when wallet connects (but not if user just logged out)
   useEffect(() => {
+    // Check if user just logged out
+    const justLoggedOut = sessionStorage.getItem("logout");
+    if (justLoggedOut) {
+      // Clear the logout flag
+      sessionStorage.removeItem("logout");
+      // Don't auto-authenticate
+      return;
+    }
+    
     if (isConnected && address && !hasRedirected.current) {
       hasRedirected.current = true;
       walletAuthMutation.mutate(address);

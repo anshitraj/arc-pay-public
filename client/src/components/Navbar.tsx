@@ -10,7 +10,7 @@ import {
   NavigationMenuTrigger,
 } from "@/components/ui/navigation-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, X, Zap, CreditCard, Shield, Code2, BookOpen, Webhook, BarChart3, Wallet } from "lucide-react";
+import { Menu, X, Zap, CreditCard, Shield, Code2, BookOpen, Webhook, BarChart3, Wallet, Droplet } from "lucide-react";
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 const productItems = [
@@ -127,82 +127,102 @@ export function Navbar() {
           </NavigationMenu>
 
           <div className="hidden lg:flex items-center gap-3">
-            <ConnectButton.Custom>
-              {({
-                account,
-                chain,
-                openAccountModal,
-                openChainModal,
-                openConnectModal,
-                authenticationStatus,
-                mounted,
-              }) => {
-                const ready = mounted && authenticationStatus !== 'loading';
-                const connected =
-                  ready &&
-                  account &&
-                  chain &&
-                  (!authenticationStatus ||
-                    authenticationStatus === 'authenticated');
+            {/* Only show Connect Wallet button on dashboard/app routes, not on homepage */}
+            {!isLanding && (
+              <ConnectButton.Custom>
+                {({
+                  account,
+                  chain,
+                  openAccountModal,
+                  openChainModal,
+                  openConnectModal,
+                  authenticationStatus,
+                  mounted,
+                }) => {
+                  const ready = mounted && authenticationStatus !== 'loading';
+                  const connected =
+                    ready &&
+                    account &&
+                    chain &&
+                    (!authenticationStatus ||
+                      authenticationStatus === 'authenticated');
 
-                return (
-                  <div
-                    {...(!ready && {
-                      'aria-hidden': true,
-                      'style': {
-                        opacity: 0,
-                        pointerEvents: 'none',
-                        userSelect: 'none',
-                      },
-                    })}
-                  >
-                    {(() => {
-                      if (!connected) {
+                  return (
+                    <div
+                      {...(!ready && {
+                        'aria-hidden': true,
+                        'style': {
+                          opacity: 0,
+                          pointerEvents: 'none',
+                          userSelect: 'none',
+                        },
+                      })}
+                    >
+                      {(() => {
+                        if (!connected) {
+                          return (
+                            <Button
+                              onClick={openConnectModal}
+                              type="button"
+                              variant="outline"
+                              className="gap-2"
+                              data-testid="button-connect-wallet-nav"
+                            >
+                              <Wallet className="w-4 h-4" />
+                              Connect Wallet
+                            </Button>
+                          );
+                        }
+
+                        if (chain.unsupported) {
+                          return (
+                            <Button
+                              onClick={openChainModal}
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              data-testid="button-wrong-network"
+                            >
+                              Wrong Network
+                            </Button>
+                          );
+                        }
+
                         return (
                           <Button
-                            onClick={openConnectModal}
+                            onClick={openAccountModal}
                             type="button"
                             variant="outline"
                             className="gap-2"
-                            data-testid="button-connect-wallet-nav"
+                            data-testid="button-wallet-connected"
                           >
                             <Wallet className="w-4 h-4" />
-                            Connect Wallet
+                            {account.displayName || `${account.address.slice(0, 4)}...${account.address.slice(-4)}`}
                           </Button>
                         );
-                      }
-
-                      if (chain.unsupported) {
-                        return (
-                          <Button
-                            onClick={openChainModal}
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            data-testid="button-wrong-network"
-                          >
-                            Wrong Network
-                          </Button>
-                        );
-                      }
-
-                      return (
-                        <Button
-                          onClick={openAccountModal}
-                          type="button"
-                          variant="outline"
-                          className="gap-2"
-                          data-testid="button-wallet-connected"
-                        >
-                          <Wallet className="w-4 h-4" />
-                          {account.displayName || `${account.address.slice(0, 4)}...${account.address.slice(-4)}`}
-                        </Button>
-                      );
-                    })()}
-                  </div>
-                );
-              }}
-            </ConnectButton.Custom>
+                      })()}
+                    </div>
+                  );
+                }}
+              </ConnectButton.Custom>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              className="gap-2 text-muted-foreground hover:text-foreground"
+              data-testid="button-faucet"
+            >
+              <a
+                href="https://faucet.testnet.arc.network"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2"
+              >
+                <Droplet className="w-4 h-4" />
+                Need Faucet?
+              </a>
+            </Button>
             <Button asChild data-testid="button-dashboard">
               <Link href="/dashboard">Dashboard</Link>
             </Button>
@@ -270,83 +290,103 @@ export function Navbar() {
                   </Link>
                 </nav>
                 <div className="p-6 border-t border-border space-y-3">
-                  <ConnectButton.Custom>
-                    {({
-                      account,
-                      chain,
-                      openAccountModal,
-                      openChainModal,
-                      openConnectModal,
-                      authenticationStatus,
-                      mounted,
-                    }) => {
-                      const ready = mounted && authenticationStatus !== 'loading';
-                      const connected =
-                        ready &&
-                        account &&
-                        chain &&
-                        (!authenticationStatus ||
-                          authenticationStatus === 'authenticated');
+                  {/* Only show Connect Wallet button on dashboard/app routes, not on homepage */}
+                  {!isLanding && (
+                    <ConnectButton.Custom>
+                      {({
+                        account,
+                        chain,
+                        openAccountModal,
+                        openChainModal,
+                        openConnectModal,
+                        authenticationStatus,
+                        mounted,
+                      }) => {
+                        const ready = mounted && authenticationStatus !== 'loading';
+                        const connected =
+                          ready &&
+                          account &&
+                          chain &&
+                          (!authenticationStatus ||
+                            authenticationStatus === 'authenticated');
 
-                      return (
-                        <div
-                          {...(!ready && {
-                            'aria-hidden': true,
-                            'style': {
-                              opacity: 0,
-                              pointerEvents: 'none',
-                              userSelect: 'none',
-                            },
-                          })}
-                          className="w-full"
-                        >
-                          {(() => {
-                            if (!connected) {
+                        return (
+                          <div
+                            {...(!ready && {
+                              'aria-hidden': true,
+                              'style': {
+                                opacity: 0,
+                                pointerEvents: 'none',
+                                userSelect: 'none',
+                              },
+                            })}
+                            className="w-full"
+                          >
+                            {(() => {
+                              if (!connected) {
+                                return (
+                                  <Button
+                                    onClick={openConnectModal}
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full gap-2"
+                                    data-testid="mobile-button-connect-wallet"
+                                  >
+                                    <Wallet className="w-4 h-4" />
+                                    Connect Wallet
+                                  </Button>
+                                );
+                              }
+
+                              if (chain.unsupported) {
+                                return (
+                                  <Button
+                                    onClick={openChainModal}
+                                    type="button"
+                                    variant="destructive"
+                                    className="w-full"
+                                    data-testid="mobile-button-wrong-network"
+                                  >
+                                    Wrong Network
+                                  </Button>
+                                );
+                              }
+
                               return (
                                 <Button
-                                  onClick={openConnectModal}
+                                  onClick={openAccountModal}
                                   type="button"
                                   variant="outline"
                                   className="w-full gap-2"
-                                  data-testid="mobile-button-connect-wallet"
+                                  data-testid="mobile-button-wallet-connected"
                                 >
                                   <Wallet className="w-4 h-4" />
-                                  Connect Wallet
+                                  {account.displayName || `${account.address.slice(0, 6)}...${account.address.slice(-4)}`}
                                 </Button>
                               );
-                            }
-
-                            if (chain.unsupported) {
-                              return (
-                                <Button
-                                  onClick={openChainModal}
-                                  type="button"
-                                  variant="destructive"
-                                  className="w-full"
-                                  data-testid="mobile-button-wrong-network"
-                                >
-                                  Wrong Network
-                                </Button>
-                              );
-                            }
-
-                            return (
-                              <Button
-                                onClick={openAccountModal}
-                                type="button"
-                                variant="outline"
-                                className="w-full gap-2"
-                                data-testid="mobile-button-wallet-connected"
-                              >
-                                <Wallet className="w-4 h-4" />
-                                {account.displayName || `${account.address.slice(0, 6)}...${account.address.slice(-4)}`}
-                              </Button>
-                            );
-                          })()}
-                        </div>
-                      );
-                    }}
-                  </ConnectButton.Custom>
+                            })()}
+                          </div>
+                        );
+                      }}
+                    </ConnectButton.Custom>
+                  )}
+                  <Button
+                    variant="ghost"
+                    className="w-full gap-2 text-muted-foreground hover:text-foreground justify-start"
+                    asChild
+                    data-testid="mobile-button-faucet"
+                  >
+                    <a
+                      href="https://faucet.testnet.arc.network"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2"
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      <Droplet className="w-4 h-4" />
+                      Need Faucet?
+                    </a>
+                  </Button>
                   <Button className="w-full" asChild data-testid="mobile-button-dashboard">
                     <Link href="/dashboard" onClick={() => setMobileOpen(false)}>Dashboard</Link>
                   </Button>

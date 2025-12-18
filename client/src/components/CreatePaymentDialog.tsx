@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Form,
   FormControl,
@@ -29,8 +30,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTestMode } from "@/hooks/useTestMode";
 import { apiRequest } from "@/lib/queryClient";
 
 const createPaymentSchema = z.object({
@@ -41,6 +43,10 @@ const createPaymentSchema = z.object({
   currency: z.string().min(1, "Currency is required"),
   description: z.string().optional(),
   customerEmail: z.string().email("Invalid email").optional().or(z.literal("")),
+  expiresInMinutes: z.string().optional().refine(
+    (val) => !val || (!isNaN(parseFloat(val)) && parseFloat(val) > 0),
+    "Expiry must be a positive number"
+  ),
 });
 
 type CreatePaymentFormData = z.infer<typeof createPaymentSchema>;
@@ -52,7 +58,16 @@ interface CreatePaymentDialogProps {
 export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const { testMode } = useTestMode();
   const queryClient = useQueryClient();
+
+  // Check merchant verification status
+  const { data: verificationStatus, isLoading: isCheckingVerification } = useQuery<{ verified: boolean }>({
+    queryKey: ["/api/badges/verification"],
+    refetchInterval: 30000, // Refetch every 30s
+  });
+
+  const isVerified = verificationStatus?.verified ?? false;
 
   const form = useForm<CreatePaymentFormData>({
     resolver: zodResolver(createPaymentSchema),
@@ -61,6 +76,7 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
       currency: "USDC",
       description: "",
       customerEmail: "",
+      expiresInMinutes: "",
     },
   });
 
@@ -73,6 +89,8 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
         currency: data.currency,
         description: data.description || undefined,
         customerEmail: data.customerEmail || undefined,
+        expiresInMinutes: data.expiresInMinutes ? parseInt(data.expiresInMinutes, 10) : undefined,
+        isTest: testMode,
       });
       return await response.json();
     },
@@ -95,13 +113,25 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
   });
 
   const onSubmit = (data: CreatePaymentFormData) => {
+    if (!isVerified) {
+      toast({
+        title: "Verification Required",
+        description: "You must own a Verified Merchant Badge to create payments.",
+        variant: "destructive",
+      });
+      return;
+    }
     createPaymentMutation.mutate(data);
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2" data-testid="button-create-payment">
+        <Button 
+          className="gap-2" 
+          data-testid="button-create-payment"
+          disabled={isCheckingVerification || !isVerified}
+        >
           <Plus className="w-4 h-4" />
           Create Payment
         </Button>
@@ -114,6 +144,15 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
             secure checkout page.
           </DialogDescription>
         </DialogHeader>
+        {!isVerified && !isCheckingVerification && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Verification Required</AlertTitle>
+            <AlertDescription>
+              You must own a Verified Merchant Badge to create payments. Please claim your badge in Settings first.
+            </AlertDescription>
+          </Alert>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -198,6 +237,34 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="expiresInMinutes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Expiry (optional)</FormLabel>
+                  <FormControl>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        step="1"
+                        min="1"
+                        placeholder="30"
+                        {...field}
+                        data-testid="input-expiry"
+                        className="flex-1"
+                      />
+                      <span className="text-sm text-muted-foreground whitespace-nowrap">minutes</span>
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty to use default (30 minutes)
+                  </p>
+                </FormItem>
+              )}
+            />
+
             <div className="flex justify-end gap-3 pt-4">
               <Button
                 type="button"
@@ -209,7 +276,7 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
               </Button>
               <Button
                 type="submit"
-                disabled={createPaymentMutation.isPending}
+                disabled={createPaymentMutation.isPending || !isVerified || isCheckingVerification}
                 data-testid="button-submit-payment"
               >
                 {createPaymentMutation.isPending && (

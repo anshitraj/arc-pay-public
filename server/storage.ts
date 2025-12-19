@@ -1,5 +1,6 @@
 import { eq, desc, and, isNull } from "drizzle-orm";
 import { db } from "./db";
+import { scryptSync, timingSafeEqual } from "crypto";
 import {
   users,
   merchants,
@@ -61,8 +62,11 @@ import {
   type InsertGlobalConfig,
   type BlocklistEntry,
   type InsertBlocklistEntry,
+  type Notification,
+  type InsertNotification,
+  notifications,
 } from "@shared/schema";
-import { randomBytes } from "crypto";
+import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -125,8 +129,60 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMerchantByApiKey(apiKey: string): Promise<Merchant | undefined> {
+    // First, try the old system (merchants.apiKey)
     const [merchant] = await db.select().from(merchants).where(eq(merchants.apiKey, apiKey));
-    return merchant;
+    if (merchant) {
+      return merchant;
+    }
+
+    // Then, try the new apiKeys table
+    // Check if the key matches any keyPrefix (for publishable keys or MVP where full key is stored)
+    const matchingKey = await db
+      .select()
+      .from(apiKeys)
+      .where(
+        and(
+          eq(apiKeys.keyPrefix, apiKey),
+          isNull(apiKeys.revokedAt)
+        )
+      )
+      .limit(1);
+
+    if (matchingKey.length > 0) {
+      const apiKeyRecord = matchingKey[0];
+      // Get merchant by wallet address
+      return await this.getMerchantByWalletAddress(apiKeyRecord.walletAddress);
+    }
+
+    // For secret keys, we need to verify against hashedKey
+    // Get all non-revoked secret keys and check them
+    const allSecretKeys = await db
+      .select()
+      .from(apiKeys)
+      .where(
+        and(
+          eq(apiKeys.keyType, "secret"),
+          isNull(apiKeys.revokedAt)
+        )
+      );
+
+    for (const keyRecord of allSecretKeys) {
+      if (keyRecord.hashedKey) {
+        try {
+          const [salt, hash] = keyRecord.hashedKey.split(":");
+          const hashBuffer = Buffer.from(hash, "hex");
+          const testHash = scryptSync(apiKey, salt, 64);
+          if (timingSafeEqual(hashBuffer, testHash)) {
+            return await this.getMerchantByWalletAddress(keyRecord.walletAddress);
+          }
+        } catch (error) {
+          // Skip invalid hashes
+          continue;
+        }
+      }
+    }
+
+    return undefined;
   }
 
   async getMerchantByWalletAddress(walletAddress: string): Promise<Merchant | undefined> {
@@ -372,6 +428,7 @@ export class ExtendedStorage extends DatabaseStorage {
           logoUrl: profile.logoUrl,
           country: profile.country,
           businessType: profile.businessType,
+          defaultGasSponsorship: profile.defaultGasSponsorship !== undefined ? profile.defaultGasSponsorship : existing.defaultGasSponsorship,
           activatedAt: profile.activatedAt,
           updatedAt: new Date(),
         })
@@ -658,6 +715,71 @@ export class ExtendedStorage extends DatabaseStorage {
 
   async deleteBlocklistEntry(id: string): Promise<void> {
     await db.delete(blocklist).where(eq(blocklist.id, id));
+  }
+
+  // Notification methods
+  async getNotifications(merchantId: string): Promise<Notification[]> {
+    return await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.merchantId, merchantId))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async getUnreadNotificationsCount(merchantId: string): Promise<number> {
+    const result = await db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.merchantId, merchantId),
+          eq(notifications.read, false)
+        )
+      );
+    return result.length;
+  }
+
+  async createNotification(insertNotification: InsertNotification): Promise<Notification> {
+    const [notification] = await db.insert(notifications).values(insertNotification).returning();
+    return notification;
+  }
+
+  async markNotificationAsRead(id: string, merchantId: string): Promise<Notification | undefined> {
+    const [notification] = await db
+      .update(notifications)
+      .set({ read: true })
+      .where(
+        and(
+          eq(notifications.id, id),
+          eq(notifications.merchantId, merchantId)
+        )
+      )
+      .returning();
+    return notification;
+  }
+
+  async markAllNotificationsAsRead(merchantId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ read: true })
+      .where(eq(notifications.merchantId, merchantId));
+  }
+
+  async clearAllNotifications(merchantId: string): Promise<void> {
+    await db.delete(notifications).where(eq(notifications.merchantId, merchantId));
+  }
+
+  async deleteNotification(id: string, merchantId: string): Promise<boolean> {
+    const result = await db
+      .delete(notifications)
+      .where(
+        and(
+          eq(notifications.id, id),
+          eq(notifications.merchantId, merchantId)
+        )
+      )
+      .returning();
+    return result.length > 0;
   }
 }
 

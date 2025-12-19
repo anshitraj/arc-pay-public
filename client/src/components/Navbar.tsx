@@ -12,6 +12,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, X, Zap, CreditCard, Shield, Code2, BookOpen, Webhook, BarChart3, Wallet, Droplet } from "lucide-react";
 import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { NotificationDropdown } from "./NotificationDropdown";
 
 const productItems = [
   { title: "Payments", description: "Accept stablecoin payments instantly", icon: CreditCard, href: "/dashboard" },
@@ -203,6 +204,8 @@ export function Navbar() {
                 }}
               </ConnectButton.Custom>
             )}
+            {/* Only show notifications on dashboard/app routes, not on homepage */}
+            {!isLanding && <NotificationDropdown />}
             <Button
               variant="ghost"
               size="sm"
@@ -211,7 +214,7 @@ export function Navbar() {
               data-testid="button-faucet"
             >
               <a
-                href="https://faucet.testnet.arc.network"
+                href="https://faucet.circle.com/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2"

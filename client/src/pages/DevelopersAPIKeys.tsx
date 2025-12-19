@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +43,7 @@ export default function DevelopersAPIKeys() {
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState<string | null>(null);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
+  const [revealedKeyValues, setRevealedKeyValues] = useState<Map<string, string>>(new Map());
   const [regenerateDialog, setRegenerateDialog] = useState<{ open: boolean; keyId: string | null; keyType: "publishable" | "secret" | null }>({
     open: false,
     keyId: null,
@@ -76,17 +78,21 @@ export default function DevelopersAPIKeys() {
   const revealKeyMutation = useMutation({
     mutationFn: async (keyId: string) => {
       const response = await apiRequest("POST", `/api/developers/api-keys/${keyId}/reveal`, {});
-      return await response.json();
+      return { keyId, ...(await response.json()) };
     },
-    onSuccess: async (data: { fullKey: string }) => {
-      if (regenerateDialog.keyId) {
-        setRevealedKeys((prev) => new Set(prev).add(regenerateDialog.keyId!));
-      }
-      await queryClient.invalidateQueries({ 
-        queryKey: ["/api/developers/api-keys"],
-        exact: false 
+    onSuccess: async (data: { keyId: string; fullKey: string }) => {
+      // Store the revealed key ID and value immediately
+      setRevealedKeys((prev) => new Set(prev).add(data.keyId));
+      setRevealedKeyValues((prev) => new Map(prev).set(data.keyId, data.fullKey));
+      
+      // Update the query cache with the full key
+      queryClient.setQueryData<ApiKey[]>(["/api/developers/api-keys"], (oldData) => {
+        if (!oldData) return oldData;
+        return oldData.map((key) => 
+          key.id === data.keyId ? { ...key, fullKey: data.fullKey } : key
+        );
       });
-      await refetch();
+      
       toast({
         title: "Key revealed",
         description: "Make sure to copy it now. It won't be shown again.",
@@ -162,8 +168,9 @@ export default function DevelopersAPIKeys() {
       return await response.json();
     },
     onSuccess: async (data: { fullKey: string; id: string }) => {
-      if (data.id) {
+      if (data.id && data.fullKey) {
         setRevealedKeys(new Set([data.id]));
+        setRevealedKeyValues(new Map([[data.id, data.fullKey]]));
       }
       await queryClient.invalidateQueries({ 
         queryKey: ["/api/developers/api-keys"],
@@ -192,6 +199,10 @@ export default function DevelopersAPIKeys() {
       return await response.json();
     },
     onSuccess: async () => {
+      // Clear revealed keys state for deleted keys
+      setRevealedKeys(new Set());
+      setRevealedKeyValues(new Map());
+      
       await queryClient.invalidateQueries({ 
         queryKey: ["/api/developers/api-keys"],
         exact: false 
@@ -199,7 +210,7 @@ export default function DevelopersAPIKeys() {
       await refetch();
       toast({
         title: "Key deleted",
-        description: "The API key has been deleted successfully.",
+        description: "The API key pair has been deleted successfully.",
         variant: "default",
       });
       setDeleteDialog({ open: false, keyId: null, keyType: null });
@@ -283,9 +294,10 @@ export default function DevelopersAPIKeys() {
     if (key.keyType === "publishable") {
       return key.fullKey || key.keyPrefix;
     }
-    // Secret key
-    if (revealedKeys.has(key.id) && key.fullKey) {
-      return key.fullKey;
+    // Secret key - check both the cache and local state
+    if (revealedKeys.has(key.id)) {
+      // First check local state (immediate), then cache (after refetch)
+      return revealedKeyValues.get(key.id) || key.fullKey || key.keyPrefix;
     }
     return key.keyPrefix + "••••••••••••••••";
   };
@@ -313,7 +325,7 @@ export default function DevelopersAPIKeys() {
   };
 
   const style = {
-    "--sidebar-width": "16rem",
+    "--sidebar-width": "260px",
     "--sidebar-width-icon": "3rem",
   };
 
@@ -322,9 +334,9 @@ export default function DevelopersAPIKeys() {
       <div className="flex h-screen w-full">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b border-border bg-background/80 backdrop-blur-sm">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger />
+          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="h-6 w-6" />
               <div>
                 <h1 className="text-xl font-semibold">API Keys</h1>
                 <p className="text-sm text-muted-foreground">
@@ -332,7 +344,10 @@ export default function DevelopersAPIKeys() {
                 </p>
               </div>
             </div>
-            <TestModeToggle />
+            <div className="flex items-center gap-3">
+              <GasPriceDisplay />
+              <TestModeToggle />
+            </div>
           </header>
 
           <main className="flex-1 overflow-auto p-4 lg:p-6">
@@ -395,55 +410,6 @@ export default function DevelopersAPIKeys() {
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
-                            {editingKeyId === key.id ? (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  value={editingName}
-                                  onChange={(e) => setEditingName(e.target.value)}
-                                  placeholder="Enter API key name"
-                                  className="max-w-xs"
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      handleSaveName(key.id);
-                                    } else if (e.key === "Escape") {
-                                      handleCancelEdit();
-                                    }
-                                  }}
-                                />
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleSaveName(key.id)}
-                                  disabled={updateKeyNameMutation.isPending}
-                                >
-                                  <Check className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={handleCancelEdit}
-                                  disabled={updateKeyNameMutation.isPending}
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                {key.name ? (
-                                  <p className="text-sm text-foreground font-medium">{key.name}</p>
-                                ) : (
-                                  <p className="text-sm text-muted-foreground italic">No name</p>
-                                )}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleEditName(key)}
-                                  className="h-6 px-2"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            )}
                             {key.lastUsedAt && (
                               <p className="text-xs text-muted-foreground">
                                 Last used: {new Date(key.lastUsedAt).toLocaleString()}
@@ -469,7 +435,7 @@ export default function DevelopersAPIKeys() {
                       {filteredKeys
                         .filter((k) => k.keyType === "secret")
                         .map((key) => {
-                          const isRevealed = revealedKeys.has(key.id) && key.fullKey;
+                          const isRevealed = revealedKeys.has(key.id) && (revealedKeyValues.has(key.id) || key.fullKey);
                           return (
                             <div key={key.id} className="space-y-2">
                               <Label>Secret Key ({key.mode})</Label>
@@ -485,7 +451,8 @@ export default function DevelopersAPIKeys() {
                                   size="sm"
                                   onClick={() => {
                                     if (isRevealed) {
-                                      copyToClipboard(key.fullKey!, key.id);
+                                      const keyValue = revealedKeyValues.get(key.id) || key.fullKey || getDisplayKey(key);
+                                      copyToClipboard(keyValue, key.id);
                                     } else {
                                       handleReveal(key.id);
                                     }
@@ -591,7 +558,7 @@ export default function DevelopersAPIKeys() {
                       No API keys found for {testMode ? "test" : "live"} mode.
                     </p>
                     <p className="text-sm text-muted-foreground mb-6 text-center max-w-md">
-                      Generate your API keys to start integrating ArcPayKit payments into your application. (Limit: 2 keys)
+                      Generate your API keys to start integrating ArcPayKit payments into your application. (Limit: 2 pairs - one for test, one for live)
                     </p>
                     <Button
                       onClick={() => createKeysMutation.mutate()}
@@ -637,10 +604,205 @@ export default function DevelopersAPIKeys() {
               {filteredKeys.length >= 2 && (
                 <div className="bg-muted/50 border border-border rounded-lg p-4">
                   <p className="text-sm text-muted-foreground">
-                    You have reached the maximum limit of 2 API keys. Delete an existing key to create a new one.
+                    You have reached the maximum limit of 4 API keys (2 pairs). Delete an existing key to create a new one.
                   </p>
                 </div>
               )}
+
+              {/* API Key Usage Guide */}
+              <Card className="mt-8">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Key className="w-5 h-5" />
+                    API Key Usage Guide
+                  </CardTitle>
+                  <CardDescription>
+                    Learn how to use your API keys in your application
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-semibold mb-2">Understanding API Key Types</h3>
+                      <div className="space-y-3 mb-4">
+                        <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                          <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">🔑 Publishable Key (pk_arc_*)</h4>
+                          <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside mb-2">
+                            <li><strong>Use for:</strong> Client-side applications (browser, mobile apps)</li>
+                            <li><strong>Safe to expose:</strong> Yes, can be included in frontend code</li>
+                            <li><strong>Permissions:</strong> Read-only operations (view payments, check status)</li>
+                            <li><strong>Example:</strong> <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">pk_arc_live_...</code></li>
+                          </ul>
+                        </div>
+                        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                          <h4 className="font-semibold text-red-900 dark:text-red-100 mb-2">🔐 Secret Key (sk_arc_*)</h4>
+                          <ul className="text-sm text-red-800 dark:text-red-200 space-y-1 list-disc list-inside mb-2">
+                            <li><strong>Use for:</strong> Server-side applications only (Node.js, Python, etc.)</li>
+                            <li><strong>Safe to expose:</strong> No, never expose in client-side code</li>
+                            <li><strong>Permissions:</strong> Full access (create payments, manage webhooks, etc.)</li>
+                            <li><strong>Example:</strong> <code className="bg-red-100 dark:bg-red-900 px-1 rounded">sk_arc_live_...</code></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-semibold mb-2">1. Install ArcPayKit SDK</h3>
+                      <div className="bg-muted p-4 rounded-lg font-mono text-sm">
+                        <code>npm install arcpaykit</code>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-semibold mb-2">2. Set Up Your API Key</h3>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        <strong>For Server-Side (Recommended):</strong> Use your <strong>Secret Key</strong> in your <code className="bg-muted px-1.5 py-0.5 rounded">.env</code> file:
+                      </p>
+                      <div className="bg-muted p-4 rounded-lg font-mono text-sm mb-3">
+                        <code>ARCPAY_SECRET_KEY=sk_arc_live_...</code>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        <strong>For Client-Side:</strong> Use your <strong>Publishable Key</strong> (only for read operations):
+                      </p>
+                      <div className="bg-muted p-4 rounded-lg font-mono text-sm">
+                        <code>ARCPAY_PUBLISHABLE_KEY=pk_arc_live_...</code>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        ⚠️ <strong>Important:</strong> Never commit your secret key to version control. Always use environment variables. Secret keys should only be used on the server.
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="font-semibold mb-2">3. Initialize the SDK</h3>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        <strong>Server-Side (Node.js, Python, etc.):</strong> Use your Secret Key
+                      </p>
+                      <div className="bg-muted p-4 rounded-lg font-mono text-sm overflow-x-auto mb-4">
+                        <pre className="whitespace-pre-wrap">{`// Server-side - Use SECRET KEY
+import { ArcPay } from 'arcpaykit';
+
+const arcpay = new ArcPay(process.env.ARCPAY_SECRET_KEY);
+
+// For development/testing, use test mode:
+// const arcpay = new ArcPay(process.env.ARCPAY_SECRET_KEY, 'http://localhost:3000');`}</pre>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        <strong>Client-Side (Browser, React, etc.):</strong> Use your Publishable Key (read-only)
+                      </p>
+                      <div className="bg-muted p-4 rounded-lg font-mono text-sm overflow-x-auto">
+                        <pre className="whitespace-pre-wrap">{`// Client-side - Use PUBLISHABLE KEY (read-only)
+import { ArcPay } from 'arcpaykit';
+
+const arcpay = new ArcPay(process.env.ARCPAY_PUBLISHABLE_KEY);
+
+// Note: Publishable keys can only retrieve payment info, not create payments`}</pre>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-semibold mb-2">4. Create a Payment (Server-Side Only)</h3>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        <strong>⚠️ Important:</strong> Payment creation requires a <strong>Secret Key</strong> and must be done server-side for security.
+                      </p>
+                      <div className="bg-muted p-4 rounded-lg font-mono text-sm overflow-x-auto">
+                        <pre className="whitespace-pre-wrap">{`// This must be done on your SERVER, not in the browser
+const payment = await arcpay.payments.create({
+  amount: "99.00",
+  currency: "USDC",
+  merchantWallet: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+  description: "Premium subscription",
+  customerEmail: "customer@example.com",
+  expiresInMinutes: 60
+});
+
+console.log(payment.checkout_url);
+// Send this URL to your customer`}</pre>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-semibold mb-2">5. Using REST API Directly</h3>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        You can also use the REST API directly. <strong>Use Secret Key for creating payments, Publishable Key for reading.</strong>
+                      </p>
+                      <div className="bg-muted p-4 rounded-lg font-mono text-sm overflow-x-auto">
+                        <pre className="whitespace-pre-wrap">{`// Server-side: Create payment (requires SECRET KEY)
+fetch('https://pay.arcpaykit.com/api/payments/create', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': \`Bearer \${process.env.ARCPAY_SECRET_KEY}\`
+  },
+  body: JSON.stringify({
+    amount: "99.00",
+    currency: "USDC",
+    merchantWallet: "0x...",
+    description: "Payment"
+  })
+});
+
+// Client-side: Get payment info (can use PUBLISHABLE KEY)
+fetch('https://pay.arcpaykit.com/api/payments/pay_123', {
+  headers: {
+    'Authorization': \`Bearer \${process.env.ARCPAY_PUBLISHABLE_KEY}\`
+  }
+});
+
+// Alternative: Using x-api-key header
+fetch('https://pay.arcpaykit.com/api/payments/create', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': process.env.ARCPAY_SECRET_KEY
+  },
+  body: JSON.stringify({...})
+});`}</pre>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-semibold mb-2">6. Test Your API Key</h3>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Test if your API key is working correctly:
+                      </p>
+                      <div className="bg-muted p-4 rounded-lg font-mono text-sm overflow-x-auto">
+                        <pre className="whitespace-pre-wrap">{`curl https://pay.arcpaykit.com/api/test \\
+  -H "Authorization: Bearer YOUR_API_KEY"`}</pre>
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                      <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">💡 Quick Reference: Which Key to Use?</h4>
+                      <div className="text-sm text-blue-800 dark:text-blue-200 space-y-2">
+                        <div className="font-semibold mb-2">Use <strong>Secret Key (sk_arc_*)</strong> for:</div>
+                        <ul className="list-disc list-inside space-y-1 ml-4">
+                          <li>Creating payments (server-side only)</li>
+                          <li>Managing webhooks</li>
+                          <li>Creating refunds</li>
+                          <li>Any write operations</li>
+                        </ul>
+                        <div className="font-semibold mt-3 mb-2">Use <strong>Publishable Key (pk_arc_*)</strong> for:</div>
+                        <ul className="list-disc list-inside space-y-1 ml-4">
+                          <li>Retrieving payment status (client-side OK)</li>
+                          <li>Viewing payment details</li>
+                          <li>Read-only operations</li>
+                        </ul>
+                      </div>
+                    </div>
+                    <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                      <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-2">⚠️ Security Best Practices</h4>
+                      <ul className="text-sm text-yellow-800 dark:text-yellow-200 space-y-1 list-disc list-inside">
+                        <li><strong>Secret keys:</strong> Only use on server-side, never in browser/client code</li>
+                        <li><strong>Publishable keys:</strong> Safe for client-side, but limited to read operations</li>
+                        <li>Store keys in environment variables, never commit to git</li>
+                        <li>Rotate your keys regularly for security</li>
+                        <li>Use test mode keys during development</li>
+                        <li>If a secret key is exposed, regenerate it immediately</li>
+                      </ul>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </main>
         </div>
@@ -687,9 +849,9 @@ export default function DevelopersAPIKeys() {
               Delete API Key?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete this API key. All integrations using this key will stop working immediately.
+              This will permanently delete this API key and its paired key (both publishable and secret keys for this mode). All integrations using these keys will stop working immediately.
               <br />
-              <strong>This action cannot be undone.</strong> Make sure you have a new key ready if needed.
+              <strong>This action cannot be undone.</strong> Make sure you have new keys ready if needed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -8,3 +8,9 @@ ADD COLUMN IF NOT EXISTS name TEXT;
 -- Note: This migration is automatically applied when running `npm run db:push`
 -- The schema change is defined in shared/schema.ts
 
+
+
+
+
+
+

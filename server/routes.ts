@@ -12,6 +12,7 @@ import { registerBadgeRoutes } from "./routes/badges";
 import { registerProofRoutes } from "./routes/proofs";
 import { registerQRCodeRoutes } from "./routes/qrCodes";
 import { registerApiKeyRoutes } from "./routes/apiKeys";
+import { registerBridgeRoutes } from "./routes/bridge";
 import { startPaymentChecker } from "./services/paymentService";
 import { startTxWatcher } from "./services/txWatcher";
 import { rateLimit } from "./middleware/rateLimit";
@@ -20,6 +21,7 @@ declare module "express-session" {
   interface SessionData {
     userId?: string;
     merchantId?: string;
+    adminId?: string;
   }
 }
 
@@ -56,11 +58,17 @@ const loginSchema = z.object({
 
 const createPaymentSchema = z.object({
   amount: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Amount must be a positive number"),
-  currency: z.string().optional().default("USDC"),
+  currency: z.string().optional().default("USDC"), // Payment asset (what user pays with)
+  settlementCurrency: z.enum(["USDC", "EURC"]).default("USDC"), // Settlement currency (USDC or EURC on Arc)
+  paymentAsset: z.string().optional(), // Specific asset identifier (e.g., "USDC_ARC", "USDC_BASE", "ETH_BASE")
+  paymentChainId: z.coerce.number().int().optional(), // Chain ID where payment is made
+  conversionPath: z.string().optional(), // JSON string describing conversion path
+  estimatedFees: z.string().optional(), // Estimated network/gas fees
   description: z.string().optional(),
   customerEmail: z.string().email("Invalid email").optional().or(z.literal("").transform(() => undefined)),
   expiresInMinutes: z.coerce.number().int().positive().optional(),
   isTest: z.coerce.boolean().optional(), // Coerce to boolean to handle string "true"/"false"
+  gasSponsored: z.coerce.boolean().optional().default(false), // Gas sponsorship preference
 });
 
 const createInvoiceSchema = z.object({
@@ -376,8 +384,9 @@ export async function registerRoutes(
   });
 
   const merchantProfileSchema = z.object({
-    businessName: z.string().min(2, "Business name must be at least 2 characters").max(50, "Business name must be at most 50 characters"),
+    businessName: z.string().min(2, "Business name must be at least 2 characters").max(50, "Business name must be at most 50 characters").optional(),
     logoUrl: z.string().url().optional().or(z.literal("").transform(() => undefined)),
+    defaultGasSponsorship: z.coerce.boolean().optional(),
   });
 
   app.post("/api/merchant/profile", requireAuth, async (req, res) => {
@@ -396,20 +405,33 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Merchant wallet address not found" });
       }
 
-      const { businessName, logoUrl } = result.data;
+      const { businessName, logoUrl, defaultGasSponsorship } = result.data;
       
-      // Check if business name already exists - if so, don't allow direct change
       const existingProfile = await storage.getMerchantProfile(merchant.walletAddress);
-      if (existingProfile?.businessName && businessName !== existingProfile.businessName) {
+      
+      // If businessName is provided and different from existing, don't allow direct change
+      if (businessName && existingProfile?.businessName && businessName !== existingProfile.businessName) {
         return res.status(400).json({ 
           error: "Business name cannot be changed directly. Please submit a change request." 
         });
       }
       
+      // Use existing values if not provided
+      const finalBusinessName = businessName || existingProfile?.businessName;
+      const finalLogoUrl = logoUrl !== undefined ? (logoUrl || null) : existingProfile?.logoUrl || null;
+      
+      // If no profile exists and no businessName provided, require it
+      if (!existingProfile && !finalBusinessName) {
+        return res.status(400).json({ 
+          error: "Business name is required when creating a new profile." 
+        });
+      }
+      
       const profile = await storage.upsertMerchantProfile({
         walletAddress: merchant.walletAddress,
-        businessName,
-        logoUrl: logoUrl || null,
+        businessName: finalBusinessName!,
+        logoUrl: finalLogoUrl,
+        defaultGasSponsorship: defaultGasSponsorship !== undefined ? defaultGasSponsorship : existingProfile?.defaultGasSponsorship ?? false,
       });
 
       // Check if merchant is now eligible for badge (profile completed)
@@ -713,6 +735,42 @@ export async function registerRoutes(
     }
   });
 
+  // Set wallet address as primary payment wallet
+  app.post("/api/business/wallet-addresses/:id/set-primary", requireAuth, async (req, res) => {
+    try {
+      if (!req.session.merchantId) {
+        return res.status(400).json({ error: "No merchant associated with account" });
+      }
+
+      const merchant = await storage.getMerchant(req.session.merchantId);
+      if (!merchant || !merchant.walletAddress) {
+        return res.status(404).json({ error: "Merchant wallet address not found" });
+      }
+
+      // Get the wallet address to set as primary
+      const walletAddresses = await storage.getBusinessWalletAddresses(merchant.walletAddress);
+      const walletToSet = walletAddresses.find((w) => w.id === req.params.id);
+      
+      if (!walletToSet) {
+        return res.status(404).json({ error: "Wallet address not found" });
+      }
+
+      // Update merchant's walletAddress to the selected payment wallet address
+      const updated = await storage.updateMerchant(merchant.id, {
+        walletAddress: walletToSet.paymentWalletAddress.toLowerCase(),
+      });
+
+      if (!updated) {
+        return res.status(500).json({ error: "Failed to update merchant wallet address" });
+      }
+
+      res.json({ success: true, walletAddress: updated.walletAddress });
+    } catch (error) {
+      console.error("Set primary wallet address error:", error);
+      res.status(500).json({ error: "Failed to set primary wallet address" });
+    }
+  });
+
   app.get("/api/payments", requireAuth, async (req, res) => {
     if (!req.session.merchantId) {
       return res.json([]);
@@ -750,7 +808,20 @@ export async function registerRoutes(
         return res.status(400).json({ error: result.error.errors[0].message });
       }
 
-      const { amount, currency, description, customerEmail, expiresInMinutes, isTest } = result.data;
+      const { 
+        amount, 
+        currency, 
+        settlementCurrency, 
+        paymentAsset, 
+        paymentChainId, 
+        conversionPath, 
+        estimatedFees,
+        description, 
+        customerEmail, 
+        expiresInMinutes, 
+        isTest,
+        gasSponsored
+      } = result.data;
 
       // Get merchant to retrieve wallet address
       const merchant = await storage.getMerchant(req.session.merchantId);
@@ -779,17 +850,130 @@ export async function registerRoutes(
         merchantId: req.session.merchantId,
         amount,
         currency,
+        settlementCurrency: settlementCurrency || "USDC",
+        paymentAsset,
+        paymentChainId,
+        conversionPath,
+        estimatedFees,
         description,
         customerEmail,
         merchantWallet: merchant.walletAddress,
         expiresInMinutes,
         isTest: isTest !== undefined ? isTest : true, // Default to test mode only if not provided
+        gasSponsored: gasSponsored || false,
       });
 
       res.json(payment);
     } catch (error) {
       console.error("Create payment error:", error);
       res.status(500).json({ error: "Failed to create payment" });
+    }
+  });
+
+  // Generate QR code for payment
+  app.get("/api/payments/:id/qr", rateLimit, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const payment = await storage.getPayment(id);
+      
+      if (!payment) {
+        return res.status(404).json({ error: "Payment not found" });
+      }
+
+      // Get base URL from environment or request
+      const baseUrl = process.env.BASE_URL || 
+        (req.headers.origin ? new URL(req.headers.origin).origin : 'https://pay.arcpaykit.com');
+
+      const { generatePaymentQRCodes } = await import("./services/qrService");
+      const qrCodes = await generatePaymentQRCodes(payment.id, baseUrl);
+
+      res.json({
+        paymentId: payment.id,
+        deepLink: `arcpay://pay?invoiceId=${payment.id}`,
+        checkoutUrl: `${baseUrl}/checkout/${payment.id}`,
+        qrCodeDeepLink: qrCodes.deepLink,
+        qrCodeFallback: qrCodes.fallback,
+      });
+    } catch (error) {
+      console.error("Generate QR code error:", error);
+      res.status(500).json({ error: "Failed to generate QR code" });
+    }
+  });
+
+  // Get supported payment assets
+  app.get("/api/payments/supported-assets", rateLimit, async (req, res) => {
+    try {
+      const { settlementCurrency, isTestnet } = req.query;
+
+      if (!settlementCurrency) {
+        return res.status(400).json({ error: "settlementCurrency is required" });
+      }
+
+      if (settlementCurrency !== "USDC" && settlementCurrency !== "EURC") {
+        return res.status(400).json({ error: "Settlement currency must be USDC or EURC" });
+      }
+
+      const { getSupportedPaymentAssets } = await import("./services/bridgeService");
+      const isTest = isTestnet === "true" || isTestnet === true;
+
+      const supportedAssets = getSupportedPaymentAssets(
+        settlementCurrency as "USDC" | "EURC",
+        isTest
+      );
+
+      res.json(supportedAssets);
+    } catch (error) {
+      console.error("Get supported assets error:", error);
+      res.status(500).json({ error: "Failed to get supported assets" });
+    }
+  });
+
+  // Get conversion estimate
+  app.get("/api/payments/conversion-estimate", rateLimit, async (req, res) => {
+    try {
+      const { paymentAsset, settlementCurrency, amount, isTestnet } = req.query;
+
+      if (!paymentAsset || !settlementCurrency || !amount) {
+        return res.status(400).json({ error: "Missing required parameters" });
+      }
+
+      if (settlementCurrency !== "USDC" && settlementCurrency !== "EURC") {
+        return res.status(400).json({ error: "Settlement currency must be USDC or EURC" });
+      }
+
+      const { estimateConversion, getSupportedPaymentAssets } = await import("./services/bridgeService");
+      const isTest = isTestnet === "true" || isTestnet === true;
+
+      const estimate = estimateConversion(
+        paymentAsset as string,
+        settlementCurrency as "USDC" | "EURC",
+        amount as string,
+        isTest
+      );
+
+      // Get supported assets to determine steps
+      const supportedAssets = getSupportedPaymentAssets(
+        settlementCurrency as "USDC" | "EURC",
+        isTest
+      );
+      const selectedAsset = supportedAssets.find(a => a.asset === paymentAsset);
+
+      const steps: string[] = [];
+      if (selectedAsset?.requiresSwap) {
+        steps.push(`Swap to ${settlementCurrency} on source chain`);
+      }
+      if (selectedAsset?.requiresBridge) {
+        steps.push("Bridge via Circle CCTP");
+      }
+      steps.push(`Settle ${settlementCurrency} on Arc Network`);
+
+      res.json({
+        ...estimate,
+        steps,
+      });
+    } catch (error) {
+      console.error("Conversion estimate error:", error);
+      res.status(500).json({ error: "Failed to estimate conversion" });
     }
   });
 
@@ -947,6 +1131,93 @@ export async function registerRoutes(
     }
   });
 
+  // Webhook subscriptions (session-based for admin portal)
+  app.get("/api/webhooks/subscriptions", requireAuth, async (req, res) => {
+    try {
+      if (!req.session.merchantId) {
+        return res.json([]);
+      }
+
+      const subscriptions = await storage.getWebhookSubscriptions(req.session.merchantId);
+      res.json(
+        subscriptions.map((sub) => ({
+          id: sub.id,
+          url: sub.url,
+          events: sub.events,
+          active: sub.active,
+          createdAt: sub.createdAt,
+          // Don't return secret for security
+        }))
+      );
+    } catch (error) {
+      console.error("Get webhook subscriptions error:", error);
+      res.status(500).json({ error: "Failed to get webhook subscriptions" });
+    }
+  });
+
+  app.post("/api/webhooks/subscriptions", requireAuth, async (req, res) => {
+    try {
+      if (!req.session.merchantId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { url, events } = req.body;
+
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ error: "URL is required" });
+      }
+
+      if (!events || !Array.isArray(events) || events.length === 0) {
+        return res.status(400).json({ error: "At least one event type is required" });
+      }
+
+      try {
+        new URL(url);
+      } catch {
+        return res.status(400).json({ error: "Invalid URL" });
+      }
+
+      const subscription = await storage.createWebhookSubscription({
+        merchantId: req.session.merchantId,
+        url,
+        events,
+        secret: generateWebhookSecret(),
+        active: true,
+      });
+
+      res.json({
+        id: subscription.id,
+        url: subscription.url,
+        events: subscription.events,
+        active: subscription.active,
+        createdAt: subscription.createdAt,
+        secret: subscription.secret, // Return secret only on creation
+      });
+    } catch (error) {
+      console.error("Create webhook subscription error:", error);
+      res.status(500).json({ error: "Failed to create webhook subscription" });
+    }
+  });
+
+  app.delete("/api/webhooks/subscriptions/:id", requireAuth, async (req, res) => {
+    try {
+      if (!req.session.merchantId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const subscription = await storage.getWebhookSubscription(req.params.id);
+      if (!subscription || subscription.merchantId !== req.session.merchantId) {
+        return res.status(404).json({ error: "Webhook subscription not found" });
+      }
+
+      await storage.deleteWebhookSubscription(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete webhook subscription error:", error);
+      res.status(500).json({ error: "Failed to delete webhook subscription" });
+    }
+  });
+
   app.get("/api/webhooks/events", requireAuth, async (req, res) => {
     if (!req.session.merchantId) {
       return res.json([]);
@@ -1091,6 +1362,7 @@ export async function registerRoutes(
   registerProofRoutes(app);
   registerQRCodeRoutes(app);
   registerApiKeyRoutes(app);
+  registerBridgeRoutes(app);
 
   // Start background payment checker (legacy)
   startPaymentChecker();
@@ -1173,6 +1445,81 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Gas price fetch error:", error);
       res.status(500).json({ error: "Failed to fetch gas price" });
+    }
+  });
+
+  // Notification endpoints
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      if (!req.session.merchantId) {
+        return res.json([]);
+      }
+
+      const notifications = await storage.getNotifications(req.session.merchantId);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Get notifications error:", error);
+      res.status(500).json({ error: "Failed to get notifications" });
+    }
+  });
+
+  app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
+    try {
+      if (!req.session.merchantId) {
+        return res.json({ count: 0 });
+      }
+
+      const count = await storage.getUnreadNotificationsCount(req.session.merchantId);
+      res.json({ count });
+    } catch (error) {
+      console.error("Get unread notifications count error:", error);
+      res.status(500).json({ error: "Failed to get unread notifications count" });
+    }
+  });
+
+  app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
+    try {
+      if (!req.session.merchantId) {
+        return res.status(400).json({ error: "No merchant associated with account" });
+      }
+
+      const notification = await storage.markNotificationAsRead(req.params.id, req.session.merchantId);
+      if (!notification) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+
+      res.json(notification);
+    } catch (error) {
+      console.error("Mark notification as read error:", error);
+      res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+  });
+
+  app.post("/api/notifications/mark-all-read", requireAuth, async (req, res) => {
+    try {
+      if (!req.session.merchantId) {
+        return res.status(400).json({ error: "No merchant associated with account" });
+      }
+
+      await storage.markAllNotificationsAsRead(req.session.merchantId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Mark all notifications as read error:", error);
+      res.status(500).json({ error: "Failed to mark all notifications as read" });
+    }
+  });
+
+  app.delete("/api/notifications/clear", requireAuth, async (req, res) => {
+    try {
+      if (!req.session.merchantId) {
+        return res.status(400).json({ error: "No merchant associated with account" });
+      }
+
+      await storage.clearAllNotifications(req.session.merchantId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Clear notifications error:", error);
+      res.status(500).json({ error: "Failed to clear notifications" });
     }
   });
 

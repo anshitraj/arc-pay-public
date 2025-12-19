@@ -4,25 +4,46 @@ import { type Server } from "http";
 import viteConfig from "../vite.config";
 import fs from "fs";
 import path from "path";
-import { nanoid } from "nanoid";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 
 const viteLogger = createLogger();
 
+// Get the project root directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const projectRoot = path.resolve(__dirname, "..");
+const clientRoot = path.resolve(projectRoot, "client");
+
 export async function setupVite(server: Server, app: Express) {
+  const port = parseInt(process.env.PORT || "5000", 10);
+  
   const serverOptions = {
     middlewareMode: true,
-    hmr: { server, path: "/vite-hmr" },
+    hmr: { 
+      server, 
+      path: "/vite-hmr",
+      protocol: "ws",
+    },
     allowedHosts: true as const,
+    watch: {
+      usePolling: false,
+      interval: 100,
+    },
   };
 
+  // Load the vite config
+  const config = await viteConfig();
+
   const vite = await createViteServer({
-    ...viteConfig,
+    ...config,
+    root: clientRoot,
     configFile: false,
     customLogger: {
       ...viteLogger,
       error: (msg, options) => {
+        // Don't exit on errors, just log them
         viteLogger.error(msg, options);
-        process.exit(1);
       },
     },
     server: serverOptions,
@@ -30,6 +51,11 @@ export async function setupVite(server: Server, app: Express) {
   });
 
   app.use(vite.middlewares);
+
+  // Cache template to avoid reading from disk on every request
+  let templateCache: string | null = null;
+  let templateCacheTime = 0;
+  const CACHE_TTL = 1000; // 1 second cache
 
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
@@ -42,12 +68,21 @@ export async function setupVite(server: Server, app: Express) {
         "index.html",
       );
 
-      // always reload the index.html file from disk incase it changes
-      let template = await fs.promises.readFile(clientTemplate, "utf-8");
-      template = template.replace(
-        `src="/src/main.tsx"`,
-        `src="/src/main.tsx?v=${nanoid()}"`,
-      );
+      // Cache template for better performance
+      const now = Date.now();
+      if (!templateCache || (now - templateCacheTime) > CACHE_TTL) {
+        templateCache = await fs.promises.readFile(clientTemplate, "utf-8");
+        templateCacheTime = now;
+      }
+      
+      let template = templateCache;
+      // Only add version query for initial load, not for HMR updates
+      if (!url.includes("vite-hmr") && !url.includes("?")) {
+        template = template.replace(
+          `src="/src/main.tsx"`,
+          `src="/src/main.tsx?v=${Date.now()}"`,
+        );
+      }
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {

@@ -15,6 +15,7 @@ import { parseUnits } from 'viem';
 import { useWallet } from "@/lib/wallet-rainbowkit";
 import { apiRequest } from "@/lib/queryClient";
 import { useTestMode } from "@/hooks/useTestMode";
+import { Navbar } from "@/components/Navbar";
 import type { Payment } from "@shared/schema";
 
 // USDC ERC20 ABI (transfer function only)
@@ -261,23 +262,26 @@ export default function QRPayment() {
   // Show error if merchant ID is invalid or merchant not found
   if (merchantId && (!merchantId.startsWith("0x") || merchantId === "invalid")) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Invalid QR Code</CardTitle>
-            <CardDescription>
-              This QR code is invalid or the merchant wallet address is not configured.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Please contact the merchant to get a valid QR code.
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-screen pt-32 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl">Invalid QR Code</CardTitle>
+              <CardDescription>
+                This QR code is invalid or the merchant wallet address is not configured.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Please contact the merchant to get a valid QR code.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -285,12 +289,15 @@ export default function QRPayment() {
   // Show loading state while fetching merchant
   if (isLoadingMerchant) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-screen pt-32 p-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -298,23 +305,26 @@ export default function QRPayment() {
   // Show error if there was an error fetching merchant
   if (merchantError) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Error Loading Merchant</CardTitle>
-            <CardDescription>
-              There was an error loading the merchant information.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {merchantError instanceof Error ? merchantError.message : "Failed to load merchant"}
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-screen pt-32 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl">Error Loading Merchant</CardTitle>
+              <CardDescription>
+                There was an error loading the merchant information.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {merchantError instanceof Error ? merchantError.message : "Failed to load merchant"}
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -322,30 +332,35 @@ export default function QRPayment() {
   // Show error if merchant not found
   if (merchantId && !isLoadingMerchant && !merchant) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Merchant Not Found</CardTitle>
-            <CardDescription>
-              The merchant associated with this QR code could not be found.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Please verify the QR code is correct or contact the merchant.
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-screen pt-32 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl">Merchant Not Found</CardTitle>
+              <CardDescription>
+                The merchant associated with this QR code could not be found.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Please verify the QR code is correct or contact the merchant.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      <div className="flex items-center justify-center min-h-screen pt-32 p-4">
+        <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <CardTitle className="text-2xl">Pay {merchantDisplayName}</CardTitle>
@@ -487,6 +502,7 @@ export default function QRPayment() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

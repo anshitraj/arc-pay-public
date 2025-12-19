@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import type { Payment } from "@shared/schema";
 import type { TreasuryBalance } from "@shared/schema";
 import { useTestMode } from "@/hooks/useTestMode";
 import { apiRequest } from "@/lib/queryClient";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, ArrowLeftRight, AlertCircle } from "lucide-react";
 import { useState } from "react";
 
 const currencyInfo: Record<string, { color: string; symbol: string }> = {
@@ -61,54 +62,104 @@ export default function DashboardTreasury() {
   };
 
 
-  const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
+  const style = { "--sidebar-width": "260px", "--sidebar-width-icon": "3rem" };
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full" data-testid="page-dashboard-treasury">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b border-border bg-background/80 backdrop-blur-sm">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger />
+          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="h-6 w-6" />
               <div>
-                <h1 className="text-xl font-semibold">Balances</h1>
-                <p className="text-sm text-muted-foreground">View your USDC balance and activity</p>
+                <h1 className="text-base font-semibold leading-tight">Balances</h1>
+                <p className="text-[11px] text-muted-foreground mt-0.5">View your USDC balance and activity</p>
               </div>
             </div>
-            <TestModeToggle />
+            <div className="flex items-center gap-3">
+              <GasPriceDisplay />
+              <TestModeToggle />
+            </div>
           </header>
 
           <main className="flex-1 overflow-auto p-4 lg:p-6">
             <div className="max-w-7xl mx-auto space-y-6">
-              {/* USDC Balance Card */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>USDC Balance</CardTitle>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleRebalance}
-                      disabled={isRebalancing}
-                    >
-                      <RefreshCw className={`w-4 h-4 mr-2 ${isRebalancing ? "animate-spin" : ""}`} />
-                      Sync Balance
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-4xl font-bold mb-4">
-                    ${displayBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Available</p>
-                      <p className="font-medium">${displayBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+              {/* Balance Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* USDC Balance Card */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>USDC Balance</CardTitle>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRebalance}
+                        disabled={isRebalancing}
+                      >
+                        <RefreshCw className={`w-4 h-4 mr-2 ${isRebalancing ? "animate-spin" : ""}`} />
+                        Sync Balance
+                      </Button>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Incoming</p>
-                      <p className="font-medium">${incomingBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-4xl font-bold mb-4">
+                      ${displayBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Available</p>
+                        <p className="font-medium">${displayBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Incoming</p>
+                        <p className="font-medium">${incomingBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* EURC Balance Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>EURC Balance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-4xl font-bold mb-4">
+                      €{treasuryBalances
+                        .find((b) => b.currency === "EURC")
+                        ?.balance ? parseFloat(treasuryBalances.find((b) => b.currency === "EURC")!.balance).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      <p>EURC on Arc Network</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Bridge Status Info */}
+              <Card className="bg-muted/50 border-border">
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-3">
+                    <ArrowLeftRight className="w-5 h-5 text-primary mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium mb-1">Cross-Chain Settlement</p>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Payments from external chains are automatically bridged via Circle CCTP to settle on Arc Network.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          <ArrowLeftRight className="w-3 h-3 mr-1" />
+                          CCTP Enabled
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          0% Slippage
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          ~20s Bridge Time
+                        </Badge>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -129,9 +180,22 @@ export default function DashboardTreasury() {
                       {filteredPayments.slice(0, 5).map((payment) => (
                         <div key={payment.id} className="flex items-center justify-between py-2 border-b last:border-0">
                           <div>
-                            <p className="font-medium">
-                              ${parseFloat(payment.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} {payment.currency}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">
+                                ${parseFloat(payment.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} {payment.currency}
+                              </p>
+                              {payment.conversionPath && payment.conversionPath.includes("CCTP") && (
+                                <Badge variant="outline" className="text-xs h-4 px-1.5">
+                                  <ArrowLeftRight className="w-2.5 h-2.5 mr-0.5" />
+                                  CCTP
+                                </Badge>
+                              )}
+                              {payment.settlementCurrency && payment.settlementCurrency !== payment.currency && (
+                                <Badge variant="secondary" className="text-xs h-4">
+                                  → {payment.settlementCurrency}
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-sm text-muted-foreground">
                               {payment.description || "Payment"}
                             </p>

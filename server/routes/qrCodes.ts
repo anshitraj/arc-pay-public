@@ -19,6 +19,7 @@ const createQRCodeSchema = z.object({
   amountType: z.enum(["fixed", "open"]),
   amount: z.string().optional(),
   description: z.string().optional(),
+  expiresInMinutes: z.coerce.number().positive().optional(),
   isTest: z.coerce.boolean().optional(),
 });
 
@@ -56,13 +57,20 @@ export function registerQRCodeRoutes(app: Express) {
         return res.status(400).json({ error: result.error.errors[0].message });
       }
 
-      const { amountType, amount, description, isTest } = result.data;
+      const { amountType, amount, description, expiresInMinutes, isTest } = result.data;
 
       // Validate fixed amount
       if (amountType === "fixed") {
         if (!amount || amount.trim() === "" || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
           return res.status(400).json({ error: "Amount is required for fixed amount QR codes" });
         }
+      }
+
+      // Calculate expiresAt if expiresInMinutes is provided
+      let expiresAt: Date | null = null;
+      if (expiresInMinutes) {
+        expiresAt = new Date();
+        expiresAt.setMinutes(expiresAt.getMinutes() + expiresInMinutes);
       }
 
       // Prepare QR code data
@@ -72,6 +80,7 @@ export function registerQRCodeRoutes(app: Express) {
         amountType,
         amount: amountType === "fixed" && amount && amount.trim() !== "" ? amount : null,
         description: description || null,
+        expiresAt,
         isTest: isTest !== undefined ? isTest : true,
       };
 

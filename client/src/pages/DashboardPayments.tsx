@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { PaymentsTable } from "@/components/PaymentsTable";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Download } from "lucide-react";
@@ -35,7 +36,7 @@ export default function DashboardPayments() {
   };
 
   const style = {
-    "--sidebar-width": "16rem",
+    "--sidebar-width": "260px",
     "--sidebar-width-icon": "3rem",
   };
 
@@ -44,18 +45,18 @@ export default function DashboardPayments() {
       <div className="flex h-screen w-full" data-testid="page-dashboard-payments">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b border-border bg-background/80 backdrop-blur-sm">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
+          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger data-testid="button-sidebar-toggle" className="h-6 w-6" />
               <div>
-                <h1 className="text-xl font-semibold">Transactions</h1>
-                <p className="text-sm text-muted-foreground">View and manage all transactions</p>
+                <h1 className="text-base font-semibold leading-tight">Transactions</h1>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <GasPriceDisplay />
               <TestModeToggle />
-              <Button variant="outline" onClick={handleExportCSV}>
-                <Download className="w-4 h-4 mr-2" />
+              <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-7 text-xs">
+                <Download className="w-3 h-3 mr-1.5" />
                 Export CSV
               </Button>
             </div>

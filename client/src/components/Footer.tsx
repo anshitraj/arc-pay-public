@@ -1,30 +1,30 @@
 import { Link } from "wouter";
-import { Zap, Twitter } from "lucide-react";
+import { Twitter } from "lucide-react";
 import { SiGithub, SiDiscord } from "react-icons/si";
 
 const footerLinks = {
   Product: [
-    { label: "Payments", href: "/dashboard" },
-    { label: "Invoicing", href: "/dashboard" },
-    { label: "Webhooks", href: "/docs" },
+    { label: "Payments", href: "/dashboard/payments" },
+    { label: "Invoicing", href: "/dashboard/invoices" },
+    { label: "Webhooks", href: "/docs#webhooks" },
     { label: "Pricing", href: "/pricing" },
   ],
   Developers: [
     { label: "Documentation", href: "/docs" },
-    { label: "API Reference", href: "/docs" },
-    { label: "SDKs", href: "/docs" },
+    { label: "API Reference", href: "/docs#payments" },
+    { label: "SDKs", href: "/docs#sdks" },
     { label: "Changelog", href: "/docs" },
   ],
   Company: [
-    { label: "About", href: "/" },
-    { label: "Blog", href: "/" },
-    { label: "Careers", href: "/" },
-    { label: "Contact", href: "/" },
+    { label: "About", href: "/#about" },
+    { label: "Blog", href: "/#blog" },
+    { label: "Careers", href: "/#careers" },
+    { label: "Contact", href: "/#contact" },
   ],
   Legal: [
-    { label: "Privacy", href: "/" },
-    { label: "Terms", href: "/" },
-    { label: "Security", href: "/" },
+    { label: "Privacy", href: "/#privacy" },
+    { label: "Terms", href: "/#terms" },
+    { label: "Security", href: "/docs" },
   ],
 };
 
@@ -35,14 +35,12 @@ export function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8 lg:gap-12">
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="flex items-center gap-2 mb-4" data-testid="footer-logo">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <Zap className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-lg font-bold tracking-tight">ArcPayKit</span>
+              <img src="/arcpay.webp" alt="ArcPayKit" className="h-8" />
             </Link>
-            <p className="text-sm text-muted-foreground mb-4">
-              Stripe-style stablecoin payments, built natively on Arc.
-            </p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+              <span>Powered by</span>
+              <img src="/arc.webp" alt="Arc" className="h-4 w-auto object-contain" />
+            </div>
             <div className="flex gap-3">
               <a
                 href="https://twitter.com"

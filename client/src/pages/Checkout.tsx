@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Zap, Check, Loader2, Shield, Clock, AlertCircle, Wallet, ExternalLink } from "lucide-react";
+import { Zap, Check, Loader2, Shield, Clock, AlertCircle, Wallet, ExternalLink, Info } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import type { Payment } from "@shared/schema";
 import type { MerchantProfile } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -23,6 +24,8 @@ import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits } from 'viem';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ConversionFlow } from "@/components/ConversionFlow";
 
 // USDC ERC20 ABI (transfer function only)
 const USDC_ABI = [
@@ -45,12 +48,13 @@ const USDC_DECIMALS = 6; // USDC uses 6 decimals
 
 export default function Checkout() {
   const { id } = useParams<{ id: string }>();
-  const [currency, setCurrency] = useState("USDC");
+  const [paymentAsset, setPaymentAsset] = useState<string>("USDC_ARC"); // Default to USDC on Arc
   const [paymentState, setPaymentState] = useState<"idle" | "processing" | "pending" | "success" | "error">("idle");
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
-  const { address, isConnected, isArcChain, switchToArcChain } = useWallet();
+  const [gasSponsored, setGasSponsored] = useState<boolean>(false);
+  const { address, isConnected, isArcChain, switchToArcChain, chainId } = useWallet();
 
   interface PaymentWithProfile extends Payment {
     merchantProfile?: {
@@ -60,10 +64,35 @@ export default function Checkout() {
   }
 
   const { data: payment, isLoading, error, refetch } = useQuery<PaymentWithProfile>({
-    queryKey: ["/api/payments", id],
+    queryKey: [`/api/payments/${id}`],
     enabled: !!id,
-    refetchInterval: paymentState === "pending" ? 3000 : false, // Poll every 3s when pending
+    refetchInterval: (query) => {
+      const payment = query.state.data;
+      // Only poll if payment is pending and we haven't reached success state
+      if (payment?.status === "pending" && paymentState !== "success") {
+        return 5000; // Poll every 5s when pending (reduced frequency)
+      }
+      // Stop polling if confirmed or failed
+      if (payment?.status === "confirmed" || payment?.status === "failed") {
+        return false;
+      }
+      return false;
+    },
   });
+
+  // Initialize gas sponsorship from payment metadata
+  useEffect(() => {
+    if (payment?.metadata) {
+      try {
+        const metadata = JSON.parse(payment.metadata);
+        if (metadata.gasSponsored !== undefined) {
+          setGasSponsored(metadata.gasSponsored);
+        }
+      } catch {
+        // Ignore invalid JSON
+      }
+    }
+  }, [payment?.metadata]);
 
   // Check merchant verification status (public endpoint by wallet address)
   const { data: verificationStatus } = useQuery<{ verified: boolean }>({
@@ -84,6 +113,40 @@ export default function Checkout() {
   const merchantDisplayName = payment?.merchantProfile?.businessName || 
     (payment?.merchantWallet ? `${payment.merchantWallet.slice(0, 6)}...${payment.merchantWallet.slice(-4)}` : "Merchant");
   const merchantLogoUrl = payment?.merchantProfile?.logoUrl || null;
+
+  // Get settlement currency from payment (default to USDC)
+  const settlementCurrency = (payment?.settlementCurrency as "USDC" | "EURC") || "USDC";
+  const isTestnet = payment?.isTest ?? true;
+
+  // Get supported payment assets
+  const { data: supportedAssets } = useQuery<Array<{ asset: string; chainId: number; chainName: string; requiresBridge: boolean; requiresSwap: boolean }>>({
+    queryKey: ["/api/payments/supported-assets", settlementCurrency, isTestnet],
+    queryFn: async () => {
+      const response = await fetch(`/api/payments/supported-assets?settlementCurrency=${settlementCurrency}&isTestnet=${isTestnet}`);
+      if (!response.ok) return [];
+      return await response.json();
+    },
+    enabled: !!settlementCurrency,
+  });
+
+  // Get conversion estimate
+  const { data: conversionEstimate } = useQuery<{ estimatedTime: number; estimatedFees: string; conversionPath: string; steps: string[] }>({
+    queryKey: ["/api/payments/conversion-estimate", paymentAsset, settlementCurrency, payment?.amount, isTestnet],
+    queryFn: async () => {
+      if (!payment?.amount) return null;
+      const response = await fetch(
+        `/api/payments/conversion-estimate?paymentAsset=${paymentAsset}&settlementCurrency=${settlementCurrency}&amount=${payment.amount}&isTestnet=${isTestnet}`
+      );
+      if (!response.ok) return null;
+      return await response.json();
+    },
+    enabled: !!paymentAsset && !!settlementCurrency && !!payment?.amount,
+  });
+
+  // Calculate final amount with fees
+  const baseAmount = payment ? parseFloat(payment.amount) : 0;
+  const estimatedFees = conversionEstimate ? parseFloat(conversionEstimate.estimatedFees) : 0;
+  const finalAmount = baseAmount + estimatedFees;
 
   // Auto-switch to ARC chain when connected
   useEffect(() => {
@@ -131,18 +194,25 @@ export default function Checkout() {
         payerWallet: address,
         customerEmail: customerEmail || undefined,
         customerName: customerName || undefined,
+        gasSponsored: gasSponsored,
       });
       return await result.json();
     },
+    retry: false, // Don't retry on error to prevent rate limit issues
+    retryDelay: 0,
   });
+
+  // Track if we've already submitted this txHash to prevent duplicate submissions
+  const [submittedTxHash, setSubmittedTxHash] = useState<string | null>(null);
 
   // Handle transaction submission when txHash is available
   useEffect(() => {
-    if (txHash && !submitTxMutation.isPending && !submitTxMutation.isSuccess && !submitTxMutation.isError) {
+    if (txHash && txHash !== submittedTxHash && !submitTxMutation.isPending && !submitTxMutation.isSuccess && !submitTxMutation.isError) {
       setPaymentState("pending");
+      setSubmittedTxHash(txHash);
       submitTxMutation.mutate(txHash);
     }
-  }, [txHash, submitTxMutation]);
+  }, [txHash, submittedTxHash, submitTxMutation]);
 
   // Handle transaction success/failure
   useEffect(() => {
@@ -169,12 +239,19 @@ export default function Checkout() {
   useEffect(() => {
     if (payment?.status === "confirmed") {
       setPaymentState("success");
+      setSubmittedTxHash(null);
+      // Force a refetch to get the latest payment data
+      refetch();
     } else if (payment?.status === "failed") {
       setPaymentState("error");
-    } else if (payment?.status === "pending" && paymentState === "idle") {
-      setPaymentState("pending");
+      setSubmittedTxHash(null);
+    } else if (payment?.status === "pending" && paymentState !== "success") {
+      // Only set to pending if we're not already in success state
+      if (paymentState === "idle" || paymentState === "processing") {
+        setPaymentState("pending");
+      }
     }
-  }, [payment?.status, paymentState]);
+  }, [payment?.status, paymentState, refetch]);
 
   // Main payment handler
   const handlePay = async () => {
@@ -271,10 +348,7 @@ export default function Checkout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <Zap className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold tracking-tight">ArcPayKit</span>
+              <img src="/arcpay.webp" alt="ArcPayKit" className="h-8" />
             </div>
             <div className="flex items-center">
               <ConnectButton.Custom>
@@ -425,7 +499,7 @@ export default function Checkout() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Amount</span>
                       <span className="text-sm font-medium">
-                        {amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {currency}
+                        {amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {settlementCurrency}
                       </span>
                     </div>
                     {payment.description && (
@@ -537,33 +611,111 @@ export default function Checkout() {
 
                   <div className="text-center">
                     <div className="text-5xl font-bold tracking-tight mb-2">
-                      ${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      {settlementCurrency === "EURC" ? "€" : "$"}
+                      {amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </div>
-                    <Select value={currency} onValueChange={setCurrency}>
-                      <SelectTrigger className="w-32 mx-auto" data-testid="select-checkout-currency">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="USDC">USDC</SelectItem>
-                        <SelectItem value="EURC">EURC</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="text-sm text-muted-foreground mb-4">
+                      Settlement: {settlementCurrency} on Arc Network
+                    </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Network</span>
-                      <span>{getArcNetworkName()}</span>
+                  {/* Payment Asset Selection */}
+                  {supportedAssets && supportedAssets.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Payment Method</Label>
+                      <Select value={paymentAsset} onValueChange={setPaymentAsset}>
+                        <SelectTrigger data-testid="select-payment-asset">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {supportedAssets.map((asset) => (
+                            <SelectItem key={asset.asset} value={asset.asset}>
+                              {asset.asset.replace("_", " on ")} {asset.requiresSwap && "(Swap)"} {asset.requiresBridge && "(Bridge)"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Choose how you want to pay. Conversion will happen automatically.
+                      </p>
                     </div>
+                  )}
+
+                  {/* Conversion Flow */}
+                  {paymentAsset && conversionEstimate && (
+                    <ConversionFlow
+                      paymentAsset={paymentAsset}
+                      settlementCurrency={settlementCurrency}
+                      amount={payment?.amount || "0"}
+                      isTestnet={isTestnet}
+                    />
+                  )}
+
+                  {/* Fee Abstraction */}
+                  <div className="space-y-2 p-4 bg-muted/50 rounded-lg border border-border">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Gas Fee</span>
-                      <span className="text-green-500">Paid in USDC</span>
+                      <span className="text-muted-foreground">Merchant receives</span>
+                      <span className="font-medium">
+                        {baseAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {settlementCurrency}
+                      </span>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Settlement</span>
-                      <span>&lt;1 second</span>
+                    {estimatedFees > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Network fees</span>
+                        <span className="text-muted-foreground">
+                          +{estimatedFees.toLocaleString("en-US", { minimumFractionDigits: 2 })} {settlementCurrency}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between pt-2 border-t border-border">
+                      <span className="font-medium">You pay</span>
+                      <span className="text-lg font-bold">
+                        {finalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} {settlementCurrency}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+                      <Info className="w-3 h-3" />
+                      <span>All fees included. Merchant receives exact settlement amount.</span>
                     </div>
                   </div>
+
+                  {/* Gas Sponsorship Toggle */}
+                  <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/50">
+                    <div className="space-y-0.5 flex-1">
+                      <Label htmlFor="gas-sponsored" className="text-base flex items-center gap-2 cursor-pointer">
+                        <Zap className="w-4 h-4" />
+                        Gas Sponsorship
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Enable gas sponsorship via EIP-7702 where supported
+                      </p>
+                    </div>
+                    <Switch
+                      id="gas-sponsored"
+                      checked={gasSponsored}
+                      onCheckedChange={setGasSponsored}
+                    />
+                  </div>
+                  {gasSponsored && (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription className="text-xs">
+                        Gas sponsorship is only available for supported transactions. You may still pay gas fees for unsupported operations.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Testnet Banner */}
+                  {isTestnet && (
+                    <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                      <div className="flex items-center gap-2 text-sm">
+                        <AlertCircle className="w-4 h-4 text-yellow-600" />
+                        <span className="text-yellow-700 dark:text-yellow-400">
+                          ⚠ Testnet Mode — Conversions are simulated. Settlement logic mirrors production.
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {!isConnected && (
                     <div className="mb-3 p-4 bg-muted/50 rounded-lg border border-border">
@@ -613,18 +765,52 @@ export default function Checkout() {
                         Confirming...
                       </>
                     ) : (
-                      <>Pay ${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</>
+                      <>
+                        Pay {settlementCurrency === "EURC" ? "€" : "$"}
+                        {finalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </>
                     )}
                   </Button>
 
                   {paymentState === "error" && (
-                    <div className="text-sm text-destructive text-center space-y-1">
-                      <p>{paymentError || writeError?.message || submitTxMutation.error?.message || "Payment failed. Please try again."}</p>
+                    <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg space-y-2">
+                      <div className="flex items-center gap-2 text-destructive">
+                        <AlertCircle className="w-4 h-4" />
+                        <span className="font-medium">Payment Failed</span>
+                      </div>
+                      <p className="text-sm text-destructive">
+                        {paymentError || writeError?.message || submitTxMutation.error?.message || "Payment failed. Please try again."}
+                      </p>
                       {writeError?.message?.includes("RPC") && (
                         <p className="text-xs text-muted-foreground">
                           This may be a temporary network issue. Please wait a moment and try again.
                         </p>
                       )}
+                      {paymentError?.toLowerCase().includes("underpayment") && (
+                        <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs">
+                          <p className="text-yellow-700 dark:text-yellow-400">
+                            You sent less than required. Please send an additional amount to complete payment.
+                          </p>
+                        </div>
+                      )}
+                      {paymentError?.toLowerCase().includes("delay") || paymentError?.toLowerCase().includes("waiting") && (
+                        <div className="mt-2 p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs">
+                          <p className="text-blue-700 dark:text-blue-400">
+                            Payment received. Waiting for network confirmation...
+                          </p>
+                        </div>
+                      )}
+                      {paymentError?.toLowerCase().includes("unsupported") && (
+                        <div className="mt-2 p-2 bg-orange-500/10 border border-orange-500/20 rounded text-xs">
+                          <p className="text-orange-700 dark:text-orange-400">
+                            This asset is not supported yet. Please select a supported payment method.
+                          </p>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+                        <Info className="w-3 h-3" />
+                        <span>Need help? Contact support or check our FAQ.</span>
+                      </div>
                     </div>
                   )}
 

@@ -18,7 +18,6 @@ import {
   FileText,
   Wallet,
   Settings,
-  Zap,
   LogOut,
   HelpCircle,
   Link2,
@@ -30,6 +29,8 @@ import {
   Webhook,
   FileText as FileTextIcon,
   Shield,
+  ArrowLeftRight,
+  Award,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
@@ -38,6 +39,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useDisconnect } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMerchantProfile } from "@/hooks/useMerchantProfile";
+import { cn } from "@/lib/utils";
 
 const mainNavItems = [
   { title: "Home", icon: LayoutDashboard, href: "/dashboard" },
@@ -47,7 +49,9 @@ const mainNavItems = [
   { title: "Invoices", icon: FileText, href: "/dashboard/invoices" },
   { title: "Customers", icon: Users, href: "/dashboard/customers" },
   { title: "Balances", icon: Wallet, href: "/dashboard/treasury" },
+  { title: "Bridge (CCTP)", icon: ArrowLeftRight, href: "/dashboard/bridge" },
   { title: "Reports", icon: BarChart3, href: "/dashboard/reports" },
+  { title: "Claim your badge", icon: Award, href: "/dashboard/settings#badge-claim" },
 ];
 
 const developersNavItems = [
@@ -116,25 +120,25 @@ function UserProfile() {
 
   return (
     <>
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-          <span className="text-sm font-medium text-primary">
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-8 h-8 rounded-md bg-sidebar-accent flex items-center justify-center">
+          <span className="text-xs font-medium text-sidebar-accent-foreground">
             {getInitials(displayName)}
           </span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium truncate">
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium truncate text-sidebar-foreground">
               {displayName}
             </p>
             {isVerified && (
-              <Badge variant="default" className="gap-1 h-4 px-1.5 text-xs">
+              <Badge variant="outline" className="gap-1 h-4 px-1 text-xs border-sidebar-border/50">
                 <Shield className="w-2.5 h-2.5" />
               </Badge>
             )}
           </div>
           {walletAddress && (
-            <p className="text-xs text-muted-foreground truncate font-mono">
+            <p className="text-xs text-sidebar-foreground/40 truncate font-mono">
               {walletAddress}
             </p>
           )}
@@ -142,12 +146,12 @@ function UserProfile() {
       </div>
       <Button
         variant="ghost"
-        className="w-full justify-start gap-2"
+        className="w-full justify-start gap-2.5 h-9 px-3 rounded-lg text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/20 transition-all duration-200"
         onClick={handleLogout}
         data-testid="button-logout"
       >
         <LogOut className="w-4 h-4" />
-        Sign out
+        <span className="font-medium">Sign out</span>
       </Button>
     </>
   );
@@ -165,90 +169,138 @@ export function DashboardSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-4 border-b border-sidebar-border">
+      <SidebarHeader className="px-4 pt-5 pb-4 border-b border-sidebar-border/50">
         <Link href="/" className="flex items-center gap-2" data-testid="sidebar-logo">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Zap className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-bold tracking-tight">ArcPayKit</span>
+          <img src="/arcpay.webp" alt="ArcPayKit" className="h-8 w-auto" />
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="p-2">
+      <SidebarContent className="px-3 py-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="px-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Main
+          <SidebarGroupLabel className="px-3 mb-2 text-[11px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider">
+            MENU
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.href)}
-                    data-testid={`sidebar-${item.title.toLowerCase()}`}
-                  >
-                    <Link href={item.href}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+            <SidebarMenu className="gap-1">
+              {mainNavItems.map((item) => {
+                const active = isActive(item.href);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      data-testid={`sidebar-${item.title.toLowerCase()}`}
+                      className={cn(
+                        "h-9 px-3 rounded-lg font-medium transition-all duration-200 relative group",
+                        active
+                          ? "bg-sidebar-accent/60 text-sidebar-foreground shadow-sm"
+                          : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/20"
+                      )}
+                    >
+                      <Link href={item.href} className="flex items-center gap-2.5 w-full">
+                        {active && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-primary" />
+                        )}
+                        <item.icon
+                          className={cn(
+                            "w-4 h-4 transition-colors flex-shrink-0",
+                            active ? "text-sidebar-foreground" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
+                          )}
+                        />
+                        <span className="flex-1">{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup className="mt-4">
-          <SidebarGroupLabel className="px-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Developers
+        <SidebarGroup className="mt-6">
+          <SidebarGroupLabel className="px-3 mb-2 text-[11px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider">
+            DEVELOPERS
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {developersNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.href)}
-                    data-testid={`sidebar-${item.title.toLowerCase()}`}
-                  >
-                    <Link href={item.href}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+            <SidebarMenu className="gap-1">
+              {developersNavItems.map((item) => {
+                const active = isActive(item.href);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      data-testid={`sidebar-${item.title.toLowerCase()}`}
+                      className={cn(
+                        "h-9 px-3 rounded-lg font-medium transition-all duration-200 relative group",
+                        active
+                          ? "bg-sidebar-accent/60 text-sidebar-foreground shadow-sm"
+                          : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/20"
+                      )}
+                    >
+                      <Link href={item.href} className="flex items-center gap-2.5 w-full">
+                        {active && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-primary" />
+                        )}
+                        <item.icon
+                          className={cn(
+                            "w-4 h-4 transition-colors flex-shrink-0",
+                            active ? "text-sidebar-foreground" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
+                          )}
+                        />
+                        <span className="flex-1">{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup className="mt-4">
-          <SidebarGroupLabel className="px-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Settings
+        <SidebarGroup className="mt-6">
+          <SidebarGroupLabel className="px-3 mb-2 text-[11px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider">
+            SETTINGS
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {settingsNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.href)}
-                    data-testid={`sidebar-${item.title.toLowerCase()}`}
-                  >
-                    <Link href={item.href}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+            <SidebarMenu className="gap-1">
+              {settingsNavItems.map((item) => {
+                const active = isActive(item.href);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      data-testid={`sidebar-${item.title.toLowerCase()}`}
+                      className={cn(
+                        "h-9 px-3 rounded-lg font-medium transition-all duration-200 relative group",
+                        active
+                          ? "bg-sidebar-accent/60 text-sidebar-foreground shadow-sm"
+                          : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/20"
+                      )}
+                    >
+                      <Link href={item.href} className="flex items-center gap-2.5 w-full">
+                        {active && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-primary" />
+                        )}
+                        <item.icon
+                          className={cn(
+                            "w-4 h-4 transition-colors flex-shrink-0",
+                            active ? "text-sidebar-foreground" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
+                          )}
+                        />
+                        <span className="flex-1">{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-sidebar-border">
+      <SidebarFooter className="px-3 py-4 border-t border-sidebar-border/50">
         <UserProfile />
       </SidebarFooter>
     </Sidebar>

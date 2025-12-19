@@ -14,12 +14,18 @@ import { DEMO_MODE } from "../config";
 export interface CreatePaymentRequest {
   merchantId: string;
   amount: string;
-  currency: string;
+  currency: string; // Payment asset (what user pays with)
+  settlementCurrency: string; // Settlement currency (USDC or EURC on Arc)
+  paymentAsset?: string; // Specific asset identifier (e.g., "USDC_ARC", "USDC_BASE", "ETH_BASE")
+  paymentChainId?: number; // Chain ID where payment is made
+  conversionPath?: string; // JSON string describing conversion path
+  estimatedFees?: string; // Estimated network/gas fees
   description?: string;
   customerEmail?: string;
   merchantWallet: string;
   expiresInMinutes?: number;
   isTest?: boolean;
+  gasSponsored?: boolean; // Gas sponsorship preference
 }
 
 /**
@@ -30,12 +36,23 @@ export async function createPayment(request: CreatePaymentRequest) {
     ? new Date(Date.now() + request.expiresInMinutes * 60 * 1000)
     : new Date(Date.now() + 30 * 60 * 1000); // Default 30 minutes
 
+  // Store gas sponsorship in metadata
+  let metadata = null;
+  if (request.gasSponsored !== undefined) {
+    metadata = JSON.stringify({ gasSponsored: request.gasSponsored });
+  }
+
   const [payment] = await db
     .insert(payments)
     .values({
       merchantId: request.merchantId,
       amount: request.amount,
       currency: request.currency || "USDC",
+      settlementCurrency: request.settlementCurrency || "USDC",
+      paymentAsset: request.paymentAsset,
+      paymentChainId: request.paymentChainId,
+      conversionPath: request.conversionPath,
+      estimatedFees: request.estimatedFees,
       status: "created",
       description: request.description,
       customerEmail: request.customerEmail,
@@ -43,6 +60,7 @@ export async function createPayment(request: CreatePaymentRequest) {
       isDemo: false, // Real payments only - no demo mode
       isTest: request.isTest !== undefined ? request.isTest : true, // Default to test mode only if not provided
       expiresAt,
+      metadata,
     })
     .returning();
 

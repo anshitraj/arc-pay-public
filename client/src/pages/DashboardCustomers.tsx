@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -162,6 +163,7 @@ export default function DashboardCustomers() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <GasPriceDisplay />
               <TestModeToggle />
               {testMode && (
                 <Dialog open={open} onOpenChange={setOpen}>

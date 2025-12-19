@@ -1,0 +1,22 @@
+{
+  "name": "arcpaykit",
+  "version": "0.1.0",
+  "description": "Official ArcPay JavaScript SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "license": "MIT",
+  "keywords": ["payments", "web3", "stablecoin", "arcpay"],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arcpay/gateway.git"
+  }
+}
+

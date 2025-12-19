@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Zap, Wallet } from "lucide-react";
+import { Wallet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
@@ -71,10 +71,7 @@ export default function Login() {
       >
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-4" data-testid="link-home">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-              <Zap className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <span className="text-2xl font-bold tracking-tight">ArcPayKit</span>
+            <img src="/arcpay.webp" alt="ArcPayKit" className="h-10" />
           </Link>
           <p className="text-muted-foreground">
             Connect your wallet to access the dashboard

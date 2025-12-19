@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 
 export function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-8">
       <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
       <div className="absolute inset-0 overflow-hidden">
         <svg
@@ -66,21 +66,22 @@ export function Hero() {
             transition={{ duration: 0.6 }}
             className="text-center lg:text-left"
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-sm text-primary mb-6">
-              <Zap className="w-4 h-4" />
-              <span>Built on Arc Network</span>
+            <div className="flex flex-col items-center lg:items-start gap-3 mb-5">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-sm text-primary">
+                <span>Built on</span>
+                <img src="/arc.webp" alt="Arc" className="h-4 w-auto object-contain" />
+              </div>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight leading-[1.1] mb-6">
-              <span className="block">Stripe-style</span>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight leading-[1.1] mb-4">
+              <span className="block">Intent-based</span>
               <span className="block bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
-                stablecoin payments
+                stablecoin payments on Arc
               </span>
             </h1>
 
-            <p className="text-lg sm:text-xl text-muted-foreground max-w-xl mx-auto lg:mx-0 mb-8">
-              Accept USDC payments with sub-second finality. No gas headaches. 
-              Enterprise-grade infrastructure built natively on Arc.
+            <p className="text-lg sm:text-xl text-muted-foreground max-w-xl mx-auto lg:mx-0 mb-6">
+              Accept USDC and EURC payments with near-instant finality, built-in cross-chain settlement, and optional gas sponsorship — all powered natively by Arc.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -97,7 +98,7 @@ export function Hero() {
               </Link>
             </div>
 
-            <div className="flex flex-wrap gap-6 mt-10 justify-center lg:justify-start">
+            <div className="flex flex-wrap gap-6 mt-8 justify-center lg:justify-start">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock className="w-4 h-4 text-primary" />
                 <span>&lt;1s settlement</span>
@@ -128,11 +129,14 @@ export function Hero() {
               </div>
               <pre className="text-sm font-mono overflow-x-auto">
                 <code className="text-muted-foreground">
-                  <span className="text-blue-400">import</span> {" { ArcPayKit } "}
+                  <span className="text-blue-400">import</span> {" { ArcPay } "}
                   <span className="text-blue-400">from</span>{" "}
-                  <span className="text-green-400">'@arc/paykit'</span>;{"\n\n"}
+                  <span className="text-green-400">'arcpaykit'</span>;{"\n\n"}
+                  <span className="text-blue-400">const</span> arc ={" "}
+                  <span className="text-blue-400">new</span>{" "}
+                  <span className="text-yellow-400">ArcPay</span>(apiKey);{"\n\n"}
                   <span className="text-blue-400">const</span> payment ={" "}
-                  <span className="text-blue-400">await</span> ArcPayKit.
+                  <span className="text-blue-400">await</span> arc.payments.
                   <span className="text-yellow-400">create</span>({"{"}
                   {"\n"}{"  "}amount:{" "}
                   <span className="text-purple-400">100.00</span>,{"\n"}{"  "}

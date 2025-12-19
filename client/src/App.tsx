@@ -20,6 +20,7 @@ import DashboardPaymentLinks from "@/pages/DashboardPaymentLinks";
 import DashboardQRCodes from "@/pages/DashboardQRCodes";
 import DashboardCustomers from "@/pages/DashboardCustomers";
 import DashboardReports from "@/pages/DashboardReports";
+import DashboardBridge from "@/pages/DashboardBridge";
 import DevelopersAPIKeys from "@/pages/DevelopersAPIKeys";
 import DashboardWebhooks from "@/pages/DashboardWebhooks";
 import Checkout from "@/pages/Checkout";
@@ -30,6 +31,7 @@ import Login from "@/pages/Login";
 import PublicMerchant from "@/pages/PublicMerchant";
 import NotFound from "@/pages/not-found";
 import AdminLogin from "@/pages/AdminLogin";
+import AdminDashboard from "@/pages/AdminDashboard";
 import ActivateBusiness from "@/pages/ActivateBusiness";
 
 function Router() {
@@ -84,6 +86,11 @@ function Router() {
           <DashboardTreasury />
         </ProtectedRoute>
       </Route>
+      <Route path="/dashboard/bridge">
+        <ProtectedRoute>
+          <DashboardBridge />
+        </ProtectedRoute>
+      </Route>
       <Route path="/dashboard/reports">
         <ProtectedRoute>
           <DashboardReports />
@@ -120,6 +127,27 @@ function Router() {
       </Route>
       <Route path="/admin/login">
         <AdminLogin />
+      </Route>
+      <Route path="/admin/dashboard">
+        <AdminDashboard />
+      </Route>
+      <Route path="/admin/merchants">
+        <AdminDashboard />
+      </Route>
+      <Route path="/admin/payments">
+        <AdminDashboard />
+      </Route>
+      <Route path="/admin/change-requests">
+        <AdminDashboard />
+      </Route>
+      <Route path="/admin/config">
+        <AdminDashboard />
+      </Route>
+      <Route path="/admin/blocklist">
+        <AdminDashboard />
+      </Route>
+      <Route path="/admin/logs">
+        <AdminDashboard />
       </Route>
       <Route path="/activate">
         <ProtectedRoute>

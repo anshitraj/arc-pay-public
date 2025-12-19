@@ -1,6 +1,6 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface KPICardProps {
   title: string;
@@ -9,9 +9,10 @@ interface KPICardProps {
   changeLabel?: string;
   icon: LucideIcon;
   loading?: boolean;
+  isLast?: boolean;
 }
 
-export function KPICard({ title, value, change, changeLabel, icon: Icon, loading }: KPICardProps) {
+export function KPICard({ title, value, change, changeLabel, icon: Icon, loading, isLast }: KPICardProps) {
   const getTrendIcon = () => {
     if (change === undefined || change === 0) return Minus;
     return change > 0 ? TrendingUp : TrendingDown;
@@ -19,46 +20,48 @@ export function KPICard({ title, value, change, changeLabel, icon: Icon, loading
 
   const getTrendColor = () => {
     if (change === undefined || change === 0) return "text-muted-foreground";
-    return change > 0 ? "text-green-500" : "text-red-500";
+    return change > 0 ? "text-green-600" : "text-red-600";
   };
 
   const TrendIcon = getTrendIcon();
 
   if (loading) {
     return (
-      <Card className="bg-card/50 backdrop-blur-sm">
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-muted animate-pulse" />
-            <div className="w-16 h-4 rounded bg-muted animate-pulse" />
+      <div className={cn("flex-1 py-5 border border-border/30 rounded-xl bg-card/40")}>
+        <div className="px-6">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-muted/30 animate-pulse" />
+            <div className="w-20 h-3 rounded bg-muted animate-pulse" />
           </div>
-          <div className="w-24 h-8 rounded bg-muted animate-pulse mb-2" />
-          <div className="w-32 h-4 rounded bg-muted animate-pulse" />
-        </CardContent>
-      </Card>
+          <div className="w-24 h-8 rounded bg-muted animate-pulse mb-1" />
+          <div className="w-32 h-3 rounded bg-muted animate-pulse" />
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card className="bg-card/50 backdrop-blur-sm" data-testid={`kpi-${title.toLowerCase().replace(/\s+/g, '-')}`}>
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Icon className="w-6 h-6 text-primary" />
+    <div className={cn("border border-border/30 rounded-xl bg-card/40 py-5 hover:bg-card/50 transition-colors", !isLast && "")} data-testid={`kpi-${title.toLowerCase().replace(/\s+/g, '-')}`}>
+      <div className="px-6">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-muted/30 flex items-center justify-center flex-shrink-0">
+              <Icon className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{title}</div>
           </div>
           {change !== undefined && (
-            <div className={`flex items-center gap-1 text-sm ${getTrendColor()}`}>
-              <TrendIcon className="w-4 h-4" />
-              <span>{Math.abs(change).toFixed(2)}%</span>
+            <div className={cn("flex items-center gap-1 text-[10px] font-medium", getTrendColor())}>
+              <TrendIcon className="w-2.5 h-2.5" />
+              <span>{Math.abs(change).toFixed(1)}%</span>
             </div>
           )}
         </div>
-        <div className="text-3xl font-bold tracking-tight mb-1">{value}</div>
-        <div className="text-sm text-muted-foreground">{title}</div>
+        <div className="text-2xl font-semibold tracking-tight mb-1">{value}</div>
         {changeLabel && (
-          <div className="text-xs text-muted-foreground mt-1">{changeLabel}</div>
+          <div className="text-[11px] text-muted-foreground/70">{changeLabel}</div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

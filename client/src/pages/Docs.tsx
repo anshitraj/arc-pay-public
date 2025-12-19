@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,30 +16,23 @@ const sections = [
 ];
 
 const codeSnippets = {
-  install: `npm install @arc/paykit`,
-  init: `import { ArcPayKit } from '@arc/paykit';
+  install: `npm install arcpaykit`,
+  init: `import { ArcPay } from 'arcpaykit';
 
-const arc = new ArcPayKit({
-  apiKey: process.env.ARCPAY_SECRET_KEY,
-});`,
+const arc = new ArcPay(process.env.ARCPAY_SECRET_KEY);`,
   createPayment: `const payment = await arc.payments.create({
-  amount: 99.00,
-  currency: 'USDC',
-  description: 'Premium subscription',
-  customer_email: 'customer@example.com',
-  metadata: {
-    order_id: 'ord_123456',
-    product: 'premium_plan'
-  }
+  amount: "99.00",
+  currency: "USDC",
+  merchantWallet: "0x...",
+  description: "Premium subscription",
+  customerEmail: "customer@example.com"
 });
 
 console.log(payment.checkout_url);
-// https://pay.arcpaykit.com/c/pay_4f3d2e1c`,
-  webhook: `import { ArcPayKit } from '@arc/paykit';
+// https://pay.arcpaykit.com/checkout/pay_...`,
+  webhook: `import { ArcPay } from 'arcpaykit';
 
-const arc = new ArcPayKit({
-  apiKey: process.env.ARCPAY_SECRET_KEY,
-});
+const arc = new ArcPay(process.env.ARCPAY_SECRET_KEY);
 
 app.post('/webhooks/arcpay', async (req, res) => {
   const signature = req.headers['x-arc-signature'];
@@ -68,12 +62,26 @@ app.post('/webhooks/arcpay', async (req, res) => {
 
 export default function Docs() {
   const [copied, setCopied] = useState<string | null>(null);
+  const [location] = useLocation();
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
   };
+
+  // Handle hash navigation for smooth scrolling
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      const element = document.querySelector(hash);
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 100);
+      }
+    }
+  }, [location]);
 
   return (
     <div className="min-h-screen bg-background" data-testid="page-docs">
@@ -129,7 +137,7 @@ export default function Docs() {
                       <p className="text-sm font-medium mb-2">1. Install the SDK</p>
                       <Card className="bg-card/50">
                         <CardContent className="p-4 relative">
-                          <pre className="text-sm font-mono overflow-x-auto">
+                          <pre className="text-sm font-mono overflow-x-auto pr-10">
                             <code>{codeSnippets.install}</code>
                           </pre>
                           <Button
@@ -153,7 +161,7 @@ export default function Docs() {
                       <p className="text-sm font-medium mb-2">2. Initialize the client</p>
                       <Card className="bg-card/50">
                         <CardContent className="p-4 relative">
-                          <pre className="text-sm font-mono overflow-x-auto whitespace-pre">
+                          <pre className="text-sm font-mono overflow-x-auto whitespace-pre pr-10">
                             <code>{codeSnippets.init}</code>
                           </pre>
                           <Button
@@ -185,7 +193,7 @@ export default function Docs() {
                     <p className="text-sm font-medium mb-2">Create a payment</p>
                     <Card className="bg-card/50">
                       <CardContent className="p-4 relative">
-                        <pre className="text-sm font-mono overflow-x-auto whitespace-pre">
+                        <pre className="text-sm font-mono overflow-x-auto whitespace-pre pr-10">
                           <code>{codeSnippets.createPayment}</code>
                         </pre>
                         <Button
@@ -236,7 +244,7 @@ export default function Docs() {
                     <p className="text-sm font-medium mb-2">Webhook handler example</p>
                     <Card className="bg-card/50">
                       <CardContent className="p-4 relative">
-                        <pre className="text-sm font-mono overflow-x-auto whitespace-pre">
+                        <pre className="text-sm font-mono overflow-x-auto whitespace-pre pr-10">
                           <code>{codeSnippets.webhook}</code>
                         </pre>
                         <Button
@@ -271,7 +279,7 @@ export default function Docs() {
                         </div>
                         <div>
                           <div className="font-medium">Node.js</div>
-                          <div className="text-sm text-muted-foreground">npm install @arc/paykit</div>
+                          <div className="text-sm text-muted-foreground">npm install arcpaykit</div>
                         </div>
                       </CardContent>
                     </Card>

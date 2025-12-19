@@ -1,13 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
+import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Copy, Check, AlertCircle } from "lucide-react";
+import { Loader2, Copy, Check, AlertCircle, Zap, Trash2, Plus, Star, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import type { Merchant } from "@shared/schema";
 import { MerchantBadgeClaim } from "@/components/MerchantBadgeClaim";
@@ -36,6 +39,13 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import type { MerchantProfile } from "@shared/schema";
 
+interface WalletAddress {
+  id: string;
+  walletAddress: string;
+  paymentWalletAddress: string;
+  createdAt: Date;
+}
+
 const merchantProfileSchema = z.object({
   businessName: z.string().min(2, "Business name must be at least 2 characters").max(50, "Business name must be at most 50 characters"),
   logoUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
@@ -50,6 +60,7 @@ export default function DashboardSettings() {
   const [reason, setReason] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [location] = useLocation();
   const { data: merchant, isLoading } = useQuery<Merchant>({
     queryKey: ["/api/merchants"],
   });
@@ -58,6 +69,27 @@ export default function DashboardSettings() {
     queryKey: ["/api/merchant/profile"],
     enabled: !!merchant,
   });
+
+  const [walletAddress, setWalletAddress] = useState<string>("");
+
+  // Fetch wallet addresses
+  const { data: walletAddresses = [], refetch: refetchWallets } = useQuery<WalletAddress[]>({
+    queryKey: ["/api/business/wallet-addresses"],
+    enabled: !!merchant?.walletAddress,
+  });
+
+  // Handle hash navigation for smooth scrolling to badge claim section
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash === "#badge-claim") {
+      setTimeout(() => {
+        const element = document.querySelector(hash);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+    }
+  }, [location]);
 
   const form = useForm<MerchantProfileFormData>({
     resolver: zodResolver(merchantProfileSchema),
@@ -129,6 +161,110 @@ export default function DashboardSettings() {
     },
   });
 
+  const updateGasSponsorshipMutation = useMutation({
+    mutationFn: async (defaultGasSponsorship: boolean) => {
+      return await apiRequest("POST", "/api/merchant/profile", {
+        ...(profile?.businessName && { businessName: profile.businessName }),
+        ...(profile?.logoUrl && { logoUrl: profile.logoUrl }),
+        defaultGasSponsorship,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/merchant/profile"] });
+      toast({
+        title: "Gas sponsorship preference saved",
+        description: "Your preference has been saved successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save gas sponsorship preference",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Add wallet address mutation
+  const addWalletMutation = useMutation({
+    mutationFn: async (address: string) => {
+      return await apiRequest("POST", "/api/business/wallet-addresses", {
+        paymentWalletAddress: address,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Wallet address added",
+        description: "Wallet address has been added successfully.",
+      });
+      setWalletAddress("");
+      refetchWallets();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add wallet address",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete wallet address mutation
+  const deleteWalletMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/business/wallet-addresses/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Wallet address removed",
+        description: "Wallet address has been removed successfully.",
+      });
+      refetchWallets();
+      queryClient.invalidateQueries({ queryKey: ["/api/merchants"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove wallet address",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Set primary wallet address mutation
+  const setPrimaryWalletMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("POST", `/api/business/wallet-addresses/${id}/set-primary`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Primary wallet updated",
+        description: "The selected wallet address is now set as your primary payment wallet.",
+      });
+      refetchWallets();
+      queryClient.invalidateQueries({ queryKey: ["/api/merchants"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to set primary wallet address",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAddWallet = () => {
+    if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+      toast({
+        title: "Invalid wallet address",
+        description: "Please enter a valid wallet address (0x followed by 40 hexadecimal characters)",
+        variant: "destructive",
+      });
+      return;
+    }
+    addWalletMutation.mutate(walletAddress);
+  };
+
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopied(id);
@@ -146,17 +282,20 @@ export default function DashboardSettings() {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider style={{ "--sidebar-width": "260px", "--sidebar-width-icon": "3rem" } as React.CSSProperties}>
       <div className="flex h-screen w-full">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b border-border bg-background/80 backdrop-blur-sm">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger />
+          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="h-6 w-6" />
               <div>
-                <h1 className="text-xl font-semibold">Settings</h1>
-                <p className="text-sm text-muted-foreground">Manage your merchant account settings</p>
+                <h1 className="text-base font-semibold leading-tight">Settings</h1>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Manage your merchant account settings</p>
               </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <GasPriceDisplay />
             </div>
           </header>
 
@@ -351,15 +490,139 @@ export default function DashboardSettings() {
                       value={merchant?.walletAddress || ""}
                       placeholder="0x..."
                       className="font-mono text-sm mt-1"
+                      readOnly
                     />
                     <p className="text-sm text-muted-foreground mt-1">
-                      Your wallet address for receiving payments
+                      Your primary wallet address for receiving payments
                     </p>
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <Label className="mb-2 block">Payment Wallet Addresses</Label>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Add up to 3 wallet addresses where you want to receive payments
+                    </p>
+                    
+                    {walletAddresses.length > 0 && (
+                      <div className="space-y-2 mb-4">
+                        {walletAddresses.map((wallet) => {
+                          const isPrimary = merchant?.walletAddress?.toLowerCase() === wallet.paymentWalletAddress.toLowerCase();
+                          return (
+                            <div
+                              key={wallet.id}
+                              className={`flex items-center justify-between p-3 border rounded-lg ${
+                                isPrimary ? "border-primary bg-primary/5" : ""
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 flex-1">
+                                {isPrimary && (
+                                  <Star className="w-4 h-4 text-primary fill-primary" />
+                                )}
+                                <span className="font-mono text-sm">{wallet.paymentWalletAddress}</span>
+                                {isPrimary && (
+                                  <Badge variant="secondary" className="text-xs">Primary</Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {!isPrimary && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setPrimaryWalletMutation.mutate(wallet.id)}
+                                    disabled={setPrimaryWalletMutation.isPending}
+                                    title="Set as primary payment wallet"
+                                  >
+                                    <Star className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {!isPrimary && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => deleteWalletMutation.mutate(wallet.id)}
+                                    disabled={deleteWalletMutation.isPending}
+                                  >
+                                    <Trash2 className="w-4 h-4 text-destructive" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {walletAddresses.length < 3 && (
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="0x..."
+                          value={walletAddress}
+                          onChange={(e) => setWalletAddress(e.target.value)}
+                          className="font-mono"
+                        />
+                        <Button
+                          onClick={handleAddWallet}
+                          disabled={addWalletMutation.isPending || !walletAddress}
+                        >
+                          {addWalletMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+
+                    {walletAddresses.length >= 3 && (
+                      <Alert>
+                        <Info className="w-4 h-4" />
+                        <AlertDescription>
+                          Maximum of 3 wallet addresses reached
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </div>
                 </CardContent>
               </Card>
 
-              <MerchantBadgeClaim />
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Zap className="w-5 h-5" />
+                    Gas Sponsorship
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Enable gas sponsorship by default</Label>
+                      <p className="text-sm text-muted-foreground">
+                        When enabled, gas fees will be sponsored via EIP-7702 where supported
+                      </p>
+                    </div>
+                    <Switch
+                      checked={profile?.defaultGasSponsorship ?? false}
+                      onCheckedChange={(checked) => {
+                        updateGasSponsorshipMutation.mutate(checked);
+                      }}
+                      disabled={updateGasSponsorshipMutation.isPending}
+                    />
+                  </div>
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      Gas sponsorship is only available for supported transactions. Users may still pay gas fees for unsupported operations.
+                    </AlertDescription>
+                  </Alert>
+                </CardContent>
+              </Card>
+
+              <div id="badge-claim">
+                <MerchantBadgeClaim />
+              </div>
 
             </div>
           </main>

@@ -34,11 +34,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Loader2, FileText } from "lucide-react";
+import { Plus, Loader2, FileText, Download, MoreHorizontal } from "lucide-react";
 import type { Invoice } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { GasPriceDisplay } from "@/components/GasPriceDisplay";
+import { exportInvoicesToCSV, exportInvoiceToCSV } from "@/lib/csvExport";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const invoiceSchema = z.object({
   amount: z.string().min(1).refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0),
@@ -74,11 +82,12 @@ export default function DashboardInvoices() {
   const createMutation = useMutation({
     mutationFn: async (data: InvoiceFormData) => {
       // Backend expects amount as string, not number
-      return await apiRequest("POST", "/api/invoices", { 
+      const response = await apiRequest("POST", "/api/invoices", { 
         ...data, 
         amount: data.amount, // Keep as string
         currency: "USDC", // Add currency explicitly
       });
+      return await response.json();
     },
     onSuccess: () => {
       toast({ title: "Invoice Created", description: "Invoice has been created successfully." });
@@ -87,6 +96,7 @@ export default function DashboardInvoices() {
       setOpen(false);
     },
     onError: (error: Error) => {
+      console.error("Create invoice error:", error);
       toast({ 
         title: "Error", 
         description: error.message || "Failed to create invoice", 
@@ -97,7 +107,8 @@ export default function DashboardInvoices() {
 
   const markPaidMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest("POST", `/api/invoices/${id}/mark-paid`, {});
+      const response = await apiRequest("POST", `/api/invoices/${id}/mark-paid`, {});
+      return await response.json();
     },
     onSuccess: () => {
       toast({ title: "Invoice Paid", description: "Invoice marked as paid." });
@@ -105,23 +116,40 @@ export default function DashboardInvoices() {
     },
   });
 
-  const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
+  const handleExportCSV = () => {
+    exportInvoicesToCSV(invoices);
+    toast({ title: "Export Started", description: "Invoice CSV export has been downloaded." });
+  };
+
+  const handleExportSingleInvoice = (invoice: Invoice) => {
+    exportInvoiceToCSV(invoice);
+    toast({ title: "Export Started", description: "Invoice CSV export has been downloaded." });
+  };
+
+  const style = { "--sidebar-width": "260px", "--sidebar-width-icon": "3rem" };
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full" data-testid="page-dashboard-invoices">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b border-border bg-background/80 backdrop-blur-sm">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger />
+          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="h-6 w-6" />
               <div>
-                <h1 className="text-xl font-semibold">Invoices</h1>
-                <p className="text-sm text-muted-foreground">Create and manage invoices</p>
+                <h1 className="text-base font-semibold leading-tight">Invoices</h1>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Create and manage invoices</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <GasPriceDisplay />
               <TestModeToggle />
+              {invoices.length > 0 && (
+                <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-7 text-xs">
+                  <Download className="w-3 h-3 mr-1.5" />
+                  Export CSV
+                </Button>
+              )}
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
                   <Button className="gap-2" data-testid="button-create-invoice">
@@ -250,17 +278,34 @@ export default function DashboardInvoices() {
                               {new Date(invoice.createdAt).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
-                              {invoice.status !== "paid" && invoice.status !== "cancelled" && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => markPaidMutation.mutate(invoice.id)}
-                                  disabled={markPaidMutation.isPending}
-                                  data-testid={`mark-paid-${invoice.id}`}
-                                >
-                                  Mark Paid
-                                </Button>
-                              )}
+                              <div className="flex items-center gap-2">
+                                {invoice.status !== "paid" && invoice.status !== "cancelled" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => markPaidMutation.mutate(invoice.id)}
+                                    disabled={markPaidMutation.isPending}
+                                    data-testid={`mark-paid-${invoice.id}`}
+                                  >
+                                    Mark Paid
+                                  </Button>
+                                )}
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => handleExportSingleInvoice(invoice)}
+                                    >
+                                      <Download className="mr-2 h-4 w-4" />
+                                      Export as CSV
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}

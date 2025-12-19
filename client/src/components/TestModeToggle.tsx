@@ -15,17 +15,18 @@ export function TestModeToggle() {
   const disabled = !testMode && !canUseLiveMode;
 
   const toggleComponent = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       <Switch
         id="test-mode"
         checked={testMode}
         onCheckedChange={toggleTestMode}
         data-testid="test-mode-toggle"
         disabled={disabled}
+        className="scale-90"
       />
       <Label htmlFor="test-mode" className={`cursor-pointer ${disabled ? "cursor-not-allowed opacity-50" : ""}`}>
-        <Badge variant={testMode ? "secondary" : "default"} className="text-xs">
-          {testMode ? "Test mode" : "Live mode"}
+        <Badge variant="outline" className={`text-[10px] h-5 px-1.5 font-medium border-border/30 rounded-md ${testMode ? "text-muted-foreground bg-muted/20" : "text-foreground bg-primary/10"}`}>
+          {testMode ? "Test" : "Live"}
         </Badge>
       </Label>
     </div>

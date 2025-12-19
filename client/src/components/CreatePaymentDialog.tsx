@@ -30,23 +30,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Loader2, AlertCircle, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTestMode } from "@/hooks/useTestMode";
 import { apiRequest } from "@/lib/queryClient";
+import { Switch } from "@/components/ui/switch";
+import { FormDescription } from "@/components/ui/form";
 
 const createPaymentSchema = z.object({
   amount: z.string().min(1, "Amount is required").refine(
     (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
     "Amount must be a positive number"
   ),
-  currency: z.string().min(1, "Currency is required"),
+  currency: z.string().min(1, "Payment asset is required"), // Payment asset (what user pays with)
+  settlementCurrency: z.enum(["USDC", "EURC"], {
+    required_error: "Settlement currency is required",
+  }), // Settlement currency (USDC or EURC on Arc)
   description: z.string().optional(),
   customerEmail: z.string().email("Invalid email").optional().or(z.literal("")),
   expiresInMinutes: z.string().optional().refine(
     (val) => !val || (!isNaN(parseFloat(val)) && parseFloat(val) > 0),
     "Expiry must be a positive number"
   ),
+  expiryUnit: z.enum(["minutes", "hours", "days", "months"]).optional(),
+  gasSponsored: z.boolean().optional().default(false),
 });
 
 type CreatePaymentFormData = z.infer<typeof createPaymentSchema>;
@@ -74,23 +81,49 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
     defaultValues: {
       amount: "",
       currency: "USDC",
+      settlementCurrency: "USDC",
       description: "",
       customerEmail: "",
       expiresInMinutes: "",
+      expiryUnit: "minutes",
+      gasSponsored: false,
     },
   });
 
   const createPaymentMutation = useMutation({
     mutationFn: async (data: CreatePaymentFormData) => {
+      // Convert expiry to minutes based on selected unit
+      let expiresInMinutes: number | undefined;
+      if (data.expiresInMinutes && data.expiryUnit) {
+        const value = parseFloat(data.expiresInMinutes);
+        const unit = data.expiryUnit;
+        switch (unit) {
+          case "minutes":
+            expiresInMinutes = value;
+            break;
+          case "hours":
+            expiresInMinutes = value * 60;
+            break;
+          case "days":
+            expiresInMinutes = value * 60 * 24;
+            break;
+          case "months":
+            expiresInMinutes = value * 60 * 24 * 30; // Approximate: 30 days per month
+            break;
+        }
+      }
+
       // Use the correct endpoint: POST /api/payments (not /api/payments/create)
       // This endpoint uses session-based auth (requireAuth), not API key
       const response = await apiRequest("POST", "/api/payments", {
         amount: data.amount,
         currency: data.currency,
+        settlementCurrency: data.settlementCurrency,
         description: data.description || undefined,
         customerEmail: data.customerEmail || undefined,
-        expiresInMinutes: data.expiresInMinutes ? parseInt(data.expiresInMinutes, 10) : undefined,
+        expiresInMinutes: expiresInMinutes,
         isTest: testMode,
+        gasSponsored: data.gasSponsored || false,
       });
       return await response.json();
     },
@@ -128,33 +161,36 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button 
-          className="gap-2" 
+          className="gap-1.5 h-7 px-3 text-xs font-medium" 
           data-testid="button-create-payment"
           disabled={isCheckingVerification || !isVerified}
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3 h-3" />
           Create Payment
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md" data-testid="dialog-create-payment">
-        <DialogHeader>
-          <DialogTitle>Create Payment Link</DialogTitle>
-          <DialogDescription>
-            Generate a payment link to share with your customer. They'll be redirected to a
-            secure checkout page.
-          </DialogDescription>
-        </DialogHeader>
-        {!isVerified && !isCheckingVerification && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Verification Required</AlertTitle>
-            <AlertDescription>
-              You must own a Verified Merchant Badge to create payments. Please claim your badge in Settings first.
-            </AlertDescription>
-          </Alert>
-        )}
+      <DialogContent className="sm:max-w-md rounded-lg max-h-[90vh] flex flex-col p-0" data-testid="dialog-create-payment">
+        <div className="flex-shrink-0 px-6 pt-6">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-lg">Create Payment Link</DialogTitle>
+            <DialogDescription className="text-sm">
+              Generate a payment link to share with your customer. They'll be redirected to a
+              secure checkout page.
+            </DialogDescription>
+          </DialogHeader>
+          {!isVerified && !isCheckingVerification && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Verification Required</AlertTitle>
+              <AlertDescription>
+                You must own a Verified Merchant Badge to create payments. Please claim your badge in Settings first.
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+            <div className="space-y-3.5 overflow-y-auto flex-1 min-h-0 px-6 pr-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -178,26 +214,53 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
               />
               <FormField
                 control={form.control}
-                name="currency"
+                name="settlementCurrency"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Currency</FormLabel>
+                    <FormLabel>Settlement Currency</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger data-testid="select-currency">
-                          <SelectValue placeholder="Select currency" />
+                        <SelectTrigger data-testid="select-settlement-currency">
+                          <SelectValue placeholder="Select settlement currency" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="USDC">USDC</SelectItem>
-                        <SelectItem value="EURC">EURC</SelectItem>
+                        <SelectItem value="USDC">USDC (Arc)</SelectItem>
+                        <SelectItem value="EURC">EURC (Arc)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
+                    <p className="text-xs text-muted-foreground">
+                      Currency you will receive on Arc Network
+                    </p>
                   </FormItem>
                 )}
               />
             </div>
+            <FormField
+              control={form.control}
+              name="currency"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Asset (Optional)</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-currency">
+                        <SelectValue placeholder="Select payment asset" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="USDC">USDC (default)</SelectItem>
+                      <SelectItem value="EURC">EURC</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                  <p className="text-xs text-muted-foreground">
+                    Customer can choose payment method at checkout. This is just a default.
+                  </p>
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
@@ -237,50 +300,107 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
               )}
             />
 
+            <div className="space-y-2">
+              <FormLabel>Expiry (optional)</FormLabel>
+              <div className="flex items-center gap-2">
+                <FormField
+                  control={form.control}
+                  name="expiresInMinutes"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="1"
+                          min="1"
+                          placeholder="30"
+                          {...field}
+                          data-testid="input-expiry"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="expiryUnit"
+                  render={({ field }) => (
+                    <FormItem className="w-[120px]">
+                      <FormControl>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <SelectTrigger data-testid="select-expiry-unit">
+                            <SelectValue placeholder="Unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="minutes">minutes</SelectItem>
+                            <SelectItem value="hours">hours</SelectItem>
+                            <SelectItem value="days">days</SelectItem>
+                            <SelectItem value="months">months</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Leave empty to use default (30 minutes)
+              </p>
+            </div>
+
             <FormField
               control={form.control}
-              name="expiresInMinutes"
+              name="gasSponsored"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Expiry (optional)</FormLabel>
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      Gas Sponsorship
+                    </FormLabel>
+                    <FormDescription>
+                      Enable gas sponsorship via EIP-7702 where supported
+                    </FormDescription>
+                  </div>
                   <FormControl>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        step="1"
-                        min="1"
-                        placeholder="30"
-                        {...field}
-                        data-testid="input-expiry"
-                        className="flex-1"
-                      />
-                      <span className="text-sm text-muted-foreground whitespace-nowrap">minutes</span>
-                    </div>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
                   </FormControl>
-                  <FormMessage />
-                  <p className="text-xs text-muted-foreground">
-                    Leave empty to use default (30 minutes)
-                  </p>
                 </FormItem>
               )}
             />
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-xs">
+                Gas sponsorship is only available for supported transactions. Users may still pay gas fees for unsupported operations.
+              </AlertDescription>
+            </Alert>
 
-            <div className="flex justify-end gap-3 pt-4">
+            </div>
+            <div className="flex justify-end gap-2 pt-3 pb-6 px-6 border-t border-border flex-shrink-0 mt-4">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={() => setOpen(false)}
                 data-testid="button-cancel"
+                className="h-8"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
+                size="sm"
                 disabled={createPaymentMutation.isPending || !isVerified || isCheckingVerification}
                 data-testid="button-submit-payment"
+                className="h-8"
               >
                 {createPaymentMutation.isPending && (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                 )}
                 Create Payment
               </Button>

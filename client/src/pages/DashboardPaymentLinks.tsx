@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -126,7 +127,7 @@ export default function DashboardPaymentLinks() {
   };
 
   const style = {
-    "--sidebar-width": "16rem",
+    "--sidebar-width": "260px",
     "--sidebar-width-icon": "3rem",
   };
 
@@ -135,9 +136,9 @@ export default function DashboardPaymentLinks() {
       <div className="flex h-screen w-full">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b border-border bg-background/80 backdrop-blur-sm">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger />
+          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="h-6 w-6" />
               <div>
                 <h1 className="text-xl font-semibold">Payment Links</h1>
                 <p className="text-sm text-muted-foreground">
@@ -146,6 +147,7 @@ export default function DashboardPaymentLinks() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <GasPriceDisplay />
               <TestModeToggle />
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>

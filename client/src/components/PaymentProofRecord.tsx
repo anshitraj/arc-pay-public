@@ -213,7 +213,11 @@ export function PaymentProofRecord({ payment }: PaymentProofRecordProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileCheck className="w-5 h-5 text-primary" />
+            <img 
+              src="/verifiedmerchant.webp" 
+              alt="Verified On-chain Receipt" 
+              className="w-6 h-6 object-contain"
+            />
             On-chain Verified Receipt
           </CardTitle>
           <CardDescription>Payment proof recorded on-chain</CardDescription>

@@ -545,5 +545,71 @@ export function registerAdminRoutes(app: Express) {
       res.status(500).json({ error: "Failed to get audit logs" });
     }
   });
+
+  // ========== NOTIFICATIONS ==========
+
+  const sendNotificationSchema = z.object({
+    merchantId: z.string().optional(), // If not provided, send to all merchants
+    title: z.string().min(1, "Title is required"),
+    message: z.string().min(1, "Message is required"),
+    type: z.enum(["info", "warning", "success", "error"]).optional().default("info"),
+  });
+
+  // Send notification to merchant(s)
+  app.post("/api/admin/notifications/send", requireAdmin, async (req, res) => {
+    try {
+      const result = sendNotificationSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: result.error.errors[0].message });
+      }
+
+      const { merchantId, title, message, type } = result.data;
+      const admin = (req as any).admin;
+
+      if (merchantId) {
+        // Send to specific merchant
+        const merchant = await storage.getMerchant(merchantId);
+        if (!merchant) {
+          return res.status(404).json({ error: "Merchant not found" });
+        }
+
+        const notification = await storage.createNotification({
+          merchantId,
+          title,
+          message,
+          type: type || "info",
+          read: false,
+          createdBy: admin.id,
+        });
+
+        res.json(notification);
+      } else {
+        // Send to all merchants
+        const allMerchants = await db.select().from(merchants);
+        const notifications = [];
+
+        for (const merchant of allMerchants) {
+          const notification = await storage.createNotification({
+            merchantId: merchant.id,
+            title,
+            message,
+            type: type || "info",
+            read: false,
+            createdBy: admin.id,
+          });
+          notifications.push(notification);
+        }
+
+        res.json({ 
+          success: true, 
+          count: notifications.length,
+          notifications 
+        });
+      }
+    } catch (error) {
+      console.error("Send notification error:", error);
+      res.status(500).json({ error: "Failed to send notification" });
+    }
+  });
 }
 

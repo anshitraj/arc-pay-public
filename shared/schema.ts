@@ -32,7 +32,12 @@ export const payments = pgTable("payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   merchantId: varchar("merchant_id").notNull().references(() => merchants.id),
   amount: decimal("amount", { precision: 18, scale: 6 }).notNull(),
-  currency: text("currency").notNull().default("USDC"),
+  currency: text("currency").notNull().default("USDC"), // Payment asset (what user pays with)
+  settlementCurrency: text("settlement_currency").notNull().default("USDC"), // Settlement currency (USDC or EURC on Arc)
+  paymentAsset: text("payment_asset"), // Specific asset identifier (e.g., "USDC_ARC", "USDC_BASE", "ETH_BASE")
+  paymentChainId: integer("payment_chain_id"), // Chain ID where payment is made
+  conversionPath: text("conversion_path"), // JSON string describing conversion path
+  estimatedFees: decimal("estimated_fees", { precision: 18, scale: 6 }), // Estimated network/gas fees
   status: paymentStatusEnum("status").notNull().default("created"),
   description: text("description"),
   customerEmail: text("customer_email"),
@@ -148,6 +153,7 @@ export const qrCodes = pgTable("qr_codes", {
   amount: decimal("amount", { precision: 18, scale: 6 }), // null for open amount
   description: text("description"),
   isTest: boolean("is_test").default(true).notNull(),
+  expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -166,6 +172,7 @@ export const merchantProfiles = pgTable("merchant_profiles", {
   logoUrl: text("logo_url"),
   country: text("country"),
   businessType: text("business_type"), // "unregistered", "registered", "nonprofit"
+  defaultGasSponsorship: boolean("default_gas_sponsorship").default(false).notNull(),
   activatedAt: timestamp("activated_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -321,6 +328,17 @@ export const blocklist = pgTable("blocklist", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  merchantId: varchar("merchant_id").references(() => merchants.id),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").default("info"), // "info", "warning", "success", "error"
+  read: boolean("read").default(false).notNull(),
+  createdBy: varchar("created_by").references(() => adminUsers.id), // Admin who sent the notification
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const merchantsRelationsWithCustomers = relations(merchants, ({ many }) => ({
   customers: many(customers),
   paymentLinks: many(paymentLinks),
@@ -348,6 +366,7 @@ export const insertApiKeySchema = createInsertSchema(apiKeys).omit({ id: true, c
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertMerchantProfileSchema = createInsertSchema(merchantProfiles).omit({ createdAt: true, updatedAt: true });
 export const insertBusinessWalletAddressSchema = createInsertSchema(businessWalletAddresses).omit({ id: true, createdAt: true });
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -395,3 +414,5 @@ export type GlobalConfig = typeof globalConfig.$inferSelect;
 export type InsertGlobalConfig = typeof globalConfig.$inferInsert;
 export type BlocklistEntry = typeof blocklist.$inferSelect;
 export type InsertBlocklistEntry = typeof blocklist.$inferInsert;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;

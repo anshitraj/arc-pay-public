@@ -114,6 +114,15 @@ export default function Dashboard() {
             </div>
           </header>
 
+          <div className="bg-blue-500/10 border-b border-blue-500/20 text-blue-600 dark:text-blue-400 px-6 py-2.5 flex items-center justify-center flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              <span className="text-sm font-medium">
+                Arc is currently on testnet network. All transactions done here are on testnet.
+              </span>
+            </div>
+          </div>
+
           {activationStatus && !activationStatus.activated && (
             <div className="bg-orange-500/10 border-b border-orange-500/20 text-orange-600 px-6 py-2.5 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2">

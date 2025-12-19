@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { Loader2, X, Check, Trash2, Info } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from "@/hooks/useAuth";
 
 // Country list (common countries)
 const COUNTRIES = [
@@ -89,10 +90,12 @@ export default function ActivateBusiness() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { merchant } = useAuth();
   const [currentStep, setCurrentStep] = useState<Step>("location");
   const [country, setCountry] = useState<string>("");
   const [businessType, setBusinessType] = useState<BusinessType | "">("");
   const [walletAddress, setWalletAddress] = useState<string>("");
+  const hasAutoAddedWallet = useRef(false);
 
   // Fetch activation status
   const { data: activationStatus, isLoading: statusLoading } = useQuery<ActivationStatus>({
@@ -140,6 +143,31 @@ export default function ActivateBusiness() {
       });
     },
   });
+
+  // Auto-add connected wallet address when reaching wallets step
+  useEffect(() => {
+    if (
+      currentStep === "wallets" &&
+      merchant?.walletAddress &&
+      !hasAutoAddedWallet.current &&
+      !addWalletMutation.isPending
+    ) {
+      const connectedWallet = merchant.walletAddress.toLowerCase();
+      // Check if the connected wallet is already in the list
+      const isAlreadyAdded = walletAddresses.some(
+        (w) => w.paymentWalletAddress.toLowerCase() === connectedWallet
+      );
+      
+      // Auto-add if not already in list and we have no wallets yet
+      if (!isAlreadyAdded && walletAddresses.length === 0) {
+        hasAutoAddedWallet.current = true;
+        addWalletMutation.mutate(connectedWallet);
+      } else if (isAlreadyAdded) {
+        // Mark as added if it's already in the list (e.g., user navigated back and forth)
+        hasAutoAddedWallet.current = true;
+      }
+    }
+  }, [currentStep, merchant?.walletAddress, walletAddresses, addWalletMutation]);
 
   // Delete wallet address mutation
   const deleteWalletMutation = useMutation({

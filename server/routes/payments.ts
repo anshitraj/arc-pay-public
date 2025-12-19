@@ -14,10 +14,17 @@ import { getExplorerLink } from "../services/arcService";
 const createPaymentSchema = z.object({
   amount: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Amount must be positive"),
   currency: z.string().optional().default("USDC"),
+  settlementCurrency: z.enum(["USDC", "EURC"]).optional().default("USDC"),
+  paymentAsset: z.string().optional(),
+  paymentChainId: z.coerce.number().int().optional(),
+  conversionPath: z.string().optional(),
+  estimatedFees: z.string().optional(),
   description: z.string().optional(),
   customerEmail: z.string().email("Invalid email").optional().or(z.literal("").transform(() => undefined)),
   merchantWallet: z.string().refine((val) => /^0x[a-fA-F0-9]{40}$/.test(val), "Invalid wallet address"),
-  expiresInMinutes: z.number().int().positive().optional(),
+  expiresInMinutes: z.coerce.number().int().positive().optional(),
+  isTest: z.coerce.boolean().optional(),
+  gasSponsored: z.coerce.boolean().optional().default(false),
 });
 
 const confirmPaymentSchema = z.object({
@@ -50,7 +57,19 @@ export function registerPaymentRoutes(app: Express) {
 
         const payment = await createPayment({
           merchantId: req.merchant.id,
-          ...result.data,
+          amount: result.data.amount,
+          currency: result.data.currency || "USDC",
+          settlementCurrency: result.data.settlementCurrency || "USDC",
+          paymentAsset: result.data.paymentAsset,
+          paymentChainId: result.data.paymentChainId,
+          conversionPath: result.data.conversionPath,
+          estimatedFees: result.data.estimatedFees,
+          description: result.data.description,
+          customerEmail: result.data.customerEmail,
+          merchantWallet: result.data.merchantWallet,
+          expiresInMinutes: result.data.expiresInMinutes,
+          isTest: result.data.isTest,
+          gasSponsored: result.data.gasSponsored || false,
         });
 
         // Generate checkout URL

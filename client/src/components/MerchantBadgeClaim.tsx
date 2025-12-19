@@ -172,14 +172,22 @@ export function MerchantBadgeClaim() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Award className="w-5 h-5 text-primary" />
+            <img 
+              src="/verifiedmerchant.webp" 
+              alt="Verified Merchant Badge" 
+              className="w-10 h-10 object-contain"
+            />
             Verified Merchant Badge
           </CardTitle>
           <CardDescription>Your on-chain verification badge</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-green-500" />
+          <div className="flex items-center gap-3">
+            <img 
+              src="/verifiedmerchant.webp" 
+              alt="Verified Merchant Badge" 
+              className="w-20 h-20 object-contain"
+            />
             <span className="font-medium">Badge Claimed</span>
           </div>
           {badgeStatus.tokenId && (

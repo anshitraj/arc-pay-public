@@ -4,7 +4,7 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
-import { API_RATE_LIMIT_WINDOW, API_RATE_LIMIT_MAX_REQUESTS } from "../config";
+import { API_RATE_LIMIT_WINDOW, API_RATE_LIMIT_MAX_REQUESTS } from "../config.js";
 
 interface RateLimitEntry {
   count: number;

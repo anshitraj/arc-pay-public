@@ -4,7 +4,7 @@
  */
 
 import { createHash } from "crypto";
-import { storage } from "../storage";
+import { storage } from "../storage.js";
 import type { Payment } from "@shared/schema";
 
 /**

@@ -5,12 +5,12 @@
 
 import { Express, Request, Response } from "express";
 import { z } from "zod";
-import { storage } from "../storage";
-import { hashPassword, verifyPassword } from "../routes";
-import { rateLimit } from "../middleware/rateLimit";
+import { storage } from "../storage.js";
+import { hashPassword, verifyPassword } from "../routes.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 import { eq, and, or, desc } from "drizzle-orm";
 import { merchants, payments, webhookSubscriptions, qrCodes, businessNameChangeRequests, blocklist, merchantBadges, adminUsers } from "@shared/schema";
-import { db } from "../db";
+import { db } from "../db.js";
 
 // Admin authentication middleware
 async function requireAdmin(req: Request, res: Response, next: any) {

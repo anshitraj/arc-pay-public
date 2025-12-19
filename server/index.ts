@@ -13,8 +13,8 @@ const projectRoot = resolve(__dirname, "..");
 config({ path: resolve(projectRoot, ".env") });
 
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
+import { registerRoutes } from "./routes.js";
+import { serveStatic } from "./static.js";
 import { createServer } from "http";
 
 const app = express();
@@ -75,13 +75,13 @@ app.use((req, res, next) => {
 
 (async () => {
   // Initialize admin user from ADMIN_WALLET env var
-  const { initializeAdminFromWallet } = await import("./admin/init");
+  const { initializeAdminFromWallet } = await import("./admin/init.js");
   await initializeAdminFromWallet();
   
   await registerRoutes(httpServer, app);
   
   // Register admin routes
-  const { registerAdminRoutes } = await import("./routes/admin");
+  const { registerAdminRoutes } = await import("./routes/admin.js");
   registerAdminRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -98,7 +98,7 @@ app.use((req, res, next) => {
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
-    const { setupVite } = await import("./vite");
+    const { setupVite } = await import("./vite.js");
     await setupVite(httpServer, app);
   }
 

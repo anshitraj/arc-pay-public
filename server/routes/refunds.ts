@@ -5,11 +5,11 @@
 
 import type { Express } from "express";
 import { z } from "zod";
-import { requireApiKey } from "../middleware/apiKeyAuth";
-import { rateLimit } from "../middleware/rateLimit";
-import { createRefundIntent, completeRefund, getRefund, getRefundsByPayment } from "../services/refundService";
-import { storage } from "../storage";
-import { getExplorerLink } from "../services/arcService";
+import { requireApiKey } from "../middleware/apiKeyAuth.js";
+import { rateLimit } from "../middleware/rateLimit.js";
+import { createRefundIntent, completeRefund, getRefund, getRefundsByPayment } from "../services/refundService.js";
+import { storage } from "../storage.js";
+import { getExplorerLink } from "../services/arcService.js";
 
 const createRefundSchema = z.object({
   paymentId: z.string().min(1, "Payment ID is required"),

@@ -4,9 +4,9 @@
  */
 
 import { Express, Request } from "express";
-import { generateInvoiceHash, getPaymentProofStatus, isPaymentEligibleForProof } from "../services/proofService";
-import { storage } from "../storage";
-import { optionalApiKey } from "../middleware/apiKeyAuth";
+import { generateInvoiceHash, getPaymentProofStatus, isPaymentEligibleForProof } from "../services/proofService.js";
+import { storage } from "../storage.js";
+import { optionalApiKey } from "../middleware/apiKeyAuth.js";
 
 // Middleware to get merchant from session or API key
 async function getMerchant(req: Request) {

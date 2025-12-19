@@ -3,11 +3,11 @@
  * Handles non-custodial refunds - merchant wallet sends funds back to payer
  */
 
-import { db } from "../db";
+import { db } from "../db.js";
 import { refunds, payments } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { dispatchWebhook } from "./webhookService";
-import { getExplorerLink } from "./arcService";
+import { dispatchWebhook } from "./webhookService.js";
+import { getExplorerLink } from "./arcService.js";
 
 export interface RefundRequest {
   paymentId: string;

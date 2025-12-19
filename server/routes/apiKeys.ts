@@ -4,14 +4,14 @@
  */
 
 import { Express, Request, Response } from "express";
-import { storage } from "../storage";
-import { rateLimit } from "../middleware/rateLimit";
-import { requireApiKey } from "../middleware/apiKeyAuth";
+import { storage } from "../storage.js";
+import { rateLimit } from "../middleware/rateLimit.js";
+import { requireApiKey } from "../middleware/apiKeyAuth.js";
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from "crypto";
 import { z } from "zod";
 import { eq, and, isNull } from "drizzle-orm";
 import { apiKeys as apiKeysTable } from "@shared/schema";
-import { db } from "../db";
+import { db } from "../db.js";
 
 function requireAuth(req: Request, res: Response, next: any) {
   if (!req.session?.userId) {

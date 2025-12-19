@@ -3,11 +3,11 @@
  * Handles merchant badge eligibility and status
  */
 
-import { db } from "../db";
+import { db } from "../db.js";
 import { payments, merchantBadges, merchants } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import { storage } from "../storage";
-import { checkBadgeOwnership } from "./arcService";
+import { storage } from "../storage.js";
+import { checkBadgeOwnership } from "./arcService.js";
 
 /**
  * Check if a merchant is eligible for a badge

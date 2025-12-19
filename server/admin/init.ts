@@ -3,8 +3,8 @@
  * Creates admin user from ADMIN_WALLET environment variable
  */
 
-import { storage } from "../storage";
-import { hashPassword } from "../routes";
+import { storage } from "../storage.js";
+import { hashPassword } from "../routes.js";
 
 export async function initializeAdminFromWallet() {
   const adminWallet = process.env.ADMIN_WALLET;

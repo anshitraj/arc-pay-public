@@ -3,13 +3,13 @@
  * Handles payment lifecycle: create, confirm, fail, expire
  */
 
-import { db } from "../db";
+import { db } from "../db.js";
 import { payments } from "@shared/schema";
 import { eq, and, lt, isNotNull, or } from "drizzle-orm";
-import { dispatchWebhook } from "./webhookService";
-import { verifyTransaction, getExplorerLink, getBlockTimestamp } from "./arcService";
-import { recordPaymentProofOnChain } from "./contractService";
-import { DEMO_MODE } from "../config";
+import { dispatchWebhook } from "./webhookService.js";
+import { verifyTransaction, getExplorerLink, getBlockTimestamp } from "./arcService.js";
+import { recordPaymentProofOnChain } from "./contractService.js";
+import { DEMO_MODE } from "../config.js";
 
 export interface CreatePaymentRequest {
   merchantId: string;
@@ -130,7 +130,7 @@ export async function confirmPayment(paymentId: string, txHash: string, payerWal
   // Update treasury balance when payment is confirmed
   if (updatedPayment) {
     try {
-      const { storage } = await import("../storage");
+      const { storage } = await import("../storage.js");
       const treasuryBalance = await storage.getTreasuryBalance(
         updatedPayment.merchantId,
         updatedPayment.currency
@@ -159,7 +159,7 @@ export async function confirmPayment(paymentId: string, txHash: string, payerWal
     // Auto-create invoice from payment if customerEmail is provided
     if (updatedPayment.customerEmail) {
       try {
-        const { storage } = await import("../storage");
+        const { storage } = await import("../storage.js");
         // Check if invoice already exists for this payment
         const existingInvoices = await storage.getInvoices(updatedPayment.merchantId);
         const existingInvoice = existingInvoices.find(inv => inv.paymentId === updatedPayment.id);

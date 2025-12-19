@@ -5,11 +5,11 @@
 
 import type { Express } from "express";
 import { z } from "zod";
-import { requireApiKey } from "../middleware/apiKeyAuth";
-import { rateLimit } from "../middleware/rateLimit";
-import { storage } from "../storage";
-import { generateWebhookSecret } from "../storage";
-import { getWebhookEvents } from "../services/webhookService";
+import { requireApiKey } from "../middleware/apiKeyAuth.js";
+import { rateLimit } from "../middleware/rateLimit.js";
+import { storage } from "../storage.js";
+import { generateWebhookSecret } from "../storage.js";
+import { getWebhookEvents } from "../services/webhookService.js";
 
 const createWebhookSubscriptionSchema = z.object({
   url: z.string().url("Invalid URL"),

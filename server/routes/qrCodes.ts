@@ -4,7 +4,7 @@
  */
 
 import { Express, Request, Response, NextFunction } from "express";
-import { storage } from "../storage";
+import { storage } from "../storage.js";
 import { z } from "zod";
 import type { InsertQRCode } from "@shared/schema";
 

@@ -1,5 +1,5 @@
 import { eq, desc, and, isNull } from "drizzle-orm";
-import { db } from "./db";
+import { db } from "./db.js";
 import { scryptSync, timingSafeEqual } from "crypto";
 import {
   users,

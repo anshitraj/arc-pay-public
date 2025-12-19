@@ -4,7 +4,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "crypto";
-import { db } from "../db";
+import { db } from "../db.js";
 import { webhookSubscriptions, webhookEvents } from "@shared/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
 

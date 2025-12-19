@@ -4,9 +4,9 @@
  */
 
 import { Express, Request, Response, NextFunction } from "express";
-import { getMerchantBadgeStatus, isMerchantEligibleForBadge } from "../services/badgeService";
-import { storage } from "../storage";
-import { optionalApiKey } from "../middleware/apiKeyAuth";
+import { getMerchantBadgeStatus, isMerchantEligibleForBadge } from "../services/badgeService.js";
+import { storage } from "../storage.js";
+import { optionalApiKey } from "../middleware/apiKeyAuth.js";
 
 // Middleware to get merchant from session or API key
 async function getMerchant(req: Request) {
@@ -48,7 +48,7 @@ export function registerBadgeRoutes(app: Express) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { isMerchantVerified } = await import("../services/badgeService");
+      const { isMerchantVerified } = await import("../services/badgeService.js");
       const isVerified = await isMerchantVerified(merchant.id);
       res.json({ verified: isVerified });
     } catch (error) {
@@ -65,7 +65,7 @@ export function registerBadgeRoutes(app: Express) {
         return res.status(400).json({ error: "Invalid wallet address" });
       }
 
-      const { checkBadgeOwnership } = await import("../services/arcService");
+      const { checkBadgeOwnership } = await import("../services/arcService.js");
       const MERCHANT_BADGE_ADDRESS = process.env.MERCHANT_BADGE_ADDRESS;
       
       if (!MERCHANT_BADGE_ADDRESS) {

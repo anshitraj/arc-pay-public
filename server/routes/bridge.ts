@@ -5,9 +5,9 @@
 
 import type { Express } from "express";
 import { z } from "zod";
-import { requireApiKey } from "../middleware/apiKeyAuth";
-import { rateLimit } from "../middleware/rateLimit";
-import { estimateBridge, supportsCCTP } from "../services/bridgeService";
+import { requireApiKey } from "../middleware/apiKeyAuth.js";
+import { rateLimit } from "../middleware/rateLimit.js";
+import { estimateBridge, supportsCCTP } from "../services/bridgeService.js";
 
 const bridgeEstimateSchema = z.object({
   amount: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Amount must be positive"),

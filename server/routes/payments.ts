@@ -5,11 +5,11 @@
 
 import type { Express } from "express";
 import { z } from "zod";
-import { requireApiKey, optionalApiKey } from "../middleware/apiKeyAuth";
-import { rateLimit } from "../middleware/rateLimit";
-import { createPayment, confirmPayment, failPayment, expirePayment } from "../services/paymentService";
-import { storage } from "../storage";
-import { getExplorerLink } from "../services/arcService";
+import { requireApiKey, optionalApiKey } from "../middleware/apiKeyAuth.js";
+import { rateLimit } from "../middleware/rateLimit.js";
+import { createPayment, confirmPayment, failPayment, expirePayment } from "../services/paymentService.js";
+import { storage } from "../storage.js";
+import { getExplorerLink } from "../services/arcService.js";
 
 const createPaymentSchema = z.object({
   amount: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Amount must be positive"),

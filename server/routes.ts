@@ -2,22 +2,22 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { storage, generateApiKey, generateWebhookSecret } from "./storage";
-import { db, pool } from "./db";
+import { storage, generateApiKey, generateWebhookSecret } from "./storage.js";
+import { db, pool } from "./db.js";
 import { insertUserSchema, insertPaymentSchema, insertInvoiceSchema } from "@shared/schema";
 import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { z } from "zod";
-import { registerPaymentRoutes } from "./routes/payments";
-import { registerRefundRoutes } from "./routes/refunds";
-import { registerWebhookRoutes } from "./routes/webhooks";
-import { registerBadgeRoutes } from "./routes/badges";
-import { registerProofRoutes } from "./routes/proofs";
-import { registerQRCodeRoutes } from "./routes/qrCodes";
-import { registerApiKeyRoutes } from "./routes/apiKeys";
-import { registerBridgeRoutes } from "./routes/bridge";
-import { startPaymentChecker } from "./services/paymentService";
-import { startTxWatcher } from "./services/txWatcher";
-import { rateLimit } from "./middleware/rateLimit";
+import { registerPaymentRoutes } from "./routes/payments.js";
+import { registerRefundRoutes } from "./routes/refunds.js";
+import { registerWebhookRoutes } from "./routes/webhooks.js";
+import { registerBadgeRoutes } from "./routes/badges.js";
+import { registerProofRoutes } from "./routes/proofs.js";
+import { registerQRCodeRoutes } from "./routes/qrCodes.js";
+import { registerApiKeyRoutes } from "./routes/apiKeys.js";
+import { registerBridgeRoutes } from "./routes/bridge.js";
+import { startPaymentChecker } from "./services/paymentService.js";
+import { startTxWatcher } from "./services/txWatcher.js";
+import { rateLimit } from "./middleware/rateLimit.js";
 
 declare module "express-session" {
   interface SessionData {
@@ -490,8 +490,8 @@ export async function registerRoutes(
       });
 
       // Check if merchant is now eligible for badge (profile completed)
-      const { isMerchantEligibleForBadge } = await import("./services/badgeService");
-      const { isMerchantVerified } = await import("./services/badgeService");
+      const { isMerchantEligibleForBadge } = await import("./services/badgeService.js");
+      const { isMerchantVerified } = await import("./services/badgeService.js");
       const eligible = await isMerchantEligibleForBadge(merchant.id);
       const verified = await isMerchantVerified(merchant.id);
 
@@ -599,7 +599,7 @@ export async function registerRoutes(
         }));
 
       // Check verification status
-      const { isMerchantVerified } = await import("./services/badgeService");
+      const { isMerchantVerified } = await import("./services/badgeService.js");
       const verified = await isMerchantVerified(merchant.id);
 
       // Return public data only
@@ -889,7 +889,7 @@ export async function registerRoutes(
       }
 
       // Check merchant verification (must own Verified Merchant Badge)
-      const { isMerchantVerified } = await import("./services/badgeService");
+      const { isMerchantVerified } = await import("./services/badgeService.js");
       const isVerified = await isMerchantVerified(req.session.merchantId);
       if (!isVerified) {
         return res.status(403).json({ 
@@ -900,7 +900,7 @@ export async function registerRoutes(
 
       // Use payment service to create payment
       // Explicitly handle isTest: if undefined, default to true (test mode), otherwise use the provided value
-      const { createPayment } = await import("./services/paymentService");
+      const { createPayment } = await import("./services/paymentService.js");
       const payment = await createPayment({
         merchantId: req.session.merchantId,
         amount,
@@ -939,7 +939,7 @@ export async function registerRoutes(
       const baseUrl = process.env.BASE_URL || 
         (req.headers.origin ? new URL(req.headers.origin).origin : 'https://pay.arcpaykit.com');
 
-      const { generatePaymentQRCodes } = await import("./services/qrService");
+      const { generatePaymentQRCodes } = await import("./services/qrService.js");
       const qrCodes = await generatePaymentQRCodes(payment.id, baseUrl);
 
       res.json({
@@ -968,7 +968,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Settlement currency must be USDC or EURC" });
       }
 
-      const { getSupportedPaymentAssets } = await import("./services/bridgeService");
+      const { getSupportedPaymentAssets } = await import("./services/bridgeService.js");
       const isTest = isTestnet === "true" || isTestnet === true;
 
       const supportedAssets = getSupportedPaymentAssets(
@@ -996,7 +996,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Settlement currency must be USDC or EURC" });
       }
 
-      const { estimateConversion, getSupportedPaymentAssets } = await import("./services/bridgeService");
+      const { estimateConversion, getSupportedPaymentAssets } = await import("./services/bridgeService.js");
       const isTest = isTestnet === "true" || isTestnet === true;
 
       const estimate = estimateConversion(
@@ -1163,7 +1163,7 @@ export async function registerRoutes(
 
       // Dispatch invoice.paid webhook
       if (updatedInvoice) {
-        const { dispatchWebhook } = await import("./services/webhookService");
+        const { dispatchWebhook } = await import("./services/webhookService.js");
         dispatchWebhook(invoice.merchantId, "invoice.paid", {
           type: "invoice.paid",
           data: {

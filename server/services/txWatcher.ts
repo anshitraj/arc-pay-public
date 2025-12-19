@@ -3,12 +3,12 @@
  * Polls ARC RPC for transaction confirmations with exponential backoff
  */
 
-import { db } from "../db";
+import { db } from "../db.js";
 import { payments } from "@shared/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
-import { verifyTransaction } from "./arcService";
-import { confirmPayment, failPayment } from "./paymentService";
-import { ARC_CHAIN_ID } from "../config";
+import { verifyTransaction } from "./arcService.js";
+import { confirmPayment, failPayment } from "./paymentService.js";
+import { ARC_CHAIN_ID } from "../config.js";
 
 const POLL_INTERVAL = 10000; // 10 seconds
 const MAX_RETRIES = 20; // Maximum number of polling attempts (20 * 10s = 200s = ~3.3 minutes)

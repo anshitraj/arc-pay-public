@@ -139,6 +139,7 @@ export async function registerRoutes(
         sameSite: "lax", // Use "lax" for same-site requests (frontend and API on same domain)
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         path: "/",
+        // Don't set domain - let browser handle it automatically for same-domain cookies
       },
     })
   );
@@ -282,6 +283,18 @@ export async function registerRoutes(
           balance: "0",
         });
 
+        // Regenerate session ID to prevent session fixation attacks
+        // This also ensures a fresh session is created
+        await new Promise<void>((resolve, reject) => {
+          req.session.regenerate((err) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            resolve();
+          });
+        });
+
         req.session.userId = user.id;
         req.session.merchantId = merchant.id;
         
@@ -390,6 +403,18 @@ export async function registerRoutes(
         if (!merchant) {
           return res.status(500).json({ error: "Failed to create or retrieve merchant" });
         }
+
+        // Regenerate session ID to prevent session fixation attacks
+        // This also ensures a fresh session is created
+        await new Promise<void>((resolve, reject) => {
+          req.session.regenerate((err) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            resolve();
+          });
+        });
 
         req.session.userId = user.id;
         req.session.merchantId = merchant.id;

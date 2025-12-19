@@ -86,6 +86,10 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Trust proxy - CRITICAL for Vercel/serverless to set cookies correctly
+  // Without this, Express thinks requests are HTTP (insecure) when they're actually HTTPS behind Vercel's proxy
+  app.set('trust proxy', 1);
+  
   // CORS middleware for API routes
   app.use((req, res, next) => {
     const origin = req.headers.origin;
@@ -223,6 +227,16 @@ export async function registerRoutes(
 
   app.post("/api/auth/wallet-login", async (req, res) => {
     try {
+      // #region agent log
+      console.log('[DEBUG] wallet-login entry:', JSON.stringify({
+        hasSession: !!req.session,
+        sessionId: req.sessionID,
+        cookies: req.headers.cookie,
+        origin: req.headers.origin,
+        referer: req.headers.referer,
+        hypothesisId: 'A,B,C'
+      }));
+      // #endregion
       const { address } = req.body;
       
       if (!address || typeof address !== 'string' || !address.startsWith('0x')) {
@@ -276,11 +290,49 @@ export async function registerRoutes(
 
         // Ensure session is saved before sending response (critical for serverless)
         await new Promise<void>((resolve, reject) => {
-          req.session.save((err) => {
+          req.session.save(async (err) => {
+            // #region agent log
+            const setCookieHeader = res.getHeader('Set-Cookie');
+            let sessionInDb = false;
+            try {
+              const result = await pool.query('SELECT sid, sess FROM session WHERE sid = $1', [req.sessionID]);
+              sessionInDb = result.rows.length > 0;
+            } catch (dbErr) {
+              console.error('[DEBUG] Error checking session in DB:', dbErr);
+            }
+            console.log('[DEBUG] wallet-login session save callback (new user):', JSON.stringify({
+              err: err?.message,
+              sessionId: req.sessionID,
+              userId: user.id,
+              merchantId: merchant.id,
+              setCookieHeader: setCookieHeader,
+              sessionInDb: sessionInDb,
+              origin: req.headers.origin,
+              referer: req.headers.referer,
+              hypothesisId: 'A,B,C'
+            }));
+            // #endregion
             if (err) reject(err);
             else resolve();
           });
         });
+
+        // #region agent log
+        // Hook into response to capture Set-Cookie after it's set
+        const originalEnd = res.end;
+        res.end = function(chunk?: any, encoding?: any, cb?: any) {
+          const setCookieHeader = res.getHeader('Set-Cookie');
+          console.log('[DEBUG] wallet-login res.end (new user):', JSON.stringify({
+            sessionId: req.sessionID,
+            userId: user.id,
+            merchantId: merchant.id,
+            setCookieHeader: setCookieHeader,
+            allHeaders: res.getHeaders(),
+            hypothesisId: 'A'
+          }));
+          return originalEnd.call(this, chunk, encoding, cb);
+        };
+        // #endregion
 
         res.json({
           user: { id: user.id, email: user.email, name: user.name },
@@ -347,11 +399,49 @@ export async function registerRoutes(
 
         // Ensure session is saved before sending response (critical for serverless)
         await new Promise<void>((resolve, reject) => {
-          req.session.save((err) => {
+          req.session.save(async (err) => {
+            // #region agent log
+            const setCookieHeader = res.getHeader('Set-Cookie');
+            let sessionInDb = false;
+            try {
+              const result = await pool.query('SELECT sid, sess FROM session WHERE sid = $1', [req.sessionID]);
+              sessionInDb = result.rows.length > 0;
+            } catch (dbErr) {
+              console.error('[DEBUG] Error checking session in DB:', dbErr);
+            }
+            console.log('[DEBUG] wallet-login session save callback (existing user):', JSON.stringify({
+              err: err?.message,
+              sessionId: req.sessionID,
+              userId: user.id,
+              merchantId: merchant.id,
+              setCookieHeader: setCookieHeader,
+              sessionInDb: sessionInDb,
+              origin: req.headers.origin,
+              referer: req.headers.referer,
+              hypothesisId: 'A,B,C'
+            }));
+            // #endregion
             if (err) reject(err);
             else resolve();
           });
         });
+
+        // #region agent log
+        // Hook into response to capture Set-Cookie after it's set
+        const originalEnd = res.end;
+        res.end = function(chunk?: any, encoding?: any, cb?: any) {
+          const setCookieHeader = res.getHeader('Set-Cookie');
+          console.log('[DEBUG] wallet-login res.end (existing user):', JSON.stringify({
+            sessionId: req.sessionID,
+            userId: user.id,
+            merchantId: merchant.id,
+            setCookieHeader: setCookieHeader,
+            allHeaders: res.getHeaders(),
+            hypothesisId: 'A'
+          }));
+          return originalEnd.call(this, chunk, encoding, cb);
+        };
+        // #endregion
 
         res.json({
           user: { id: user.id, email: user.email, name: user.name },
@@ -399,7 +489,42 @@ export async function registerRoutes(
   });
 
   app.get("/api/auth/me", async (req, res) => {
+    // #region agent log
+    const cookies = req.headers.cookie;
+    let sessionInDb = false;
+    let sessionData = null;
+    try {
+      const result = await pool.query('SELECT sid, sess FROM session WHERE sid = $1', [req.sessionID]);
+      sessionInDb = result.rows.length > 0;
+      if (sessionInDb) {
+        sessionData = result.rows[0].sess;
+      }
+    } catch (dbErr) {
+      console.error('[DEBUG] Error checking session in DB:', dbErr);
+    }
+    console.log('[DEBUG] /api/auth/me entry:', JSON.stringify({
+      hasSession: !!req.session,
+      sessionId: req.sessionID,
+      userId: req.session?.userId,
+      merchantId: req.session?.merchantId,
+      cookies: cookies,
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+      sessionInDb: sessionInDb,
+      sessionData: sessionData,
+      hypothesisId: 'A,B,D'
+    }));
+    // #endregion
     if (!req.session.userId) {
+      // #region agent log
+      console.log('[DEBUG] /api/auth/me no userId:', JSON.stringify({
+        sessionId: req.sessionID,
+        hasSession: !!req.session,
+        cookies: cookies,
+        sessionInDb: sessionInDb,
+        hypothesisId: 'A,B,D'
+      }));
+      // #endregion
       return res.status(401).json({ error: "Not authenticated" });
     }
 
@@ -411,6 +536,15 @@ export async function registerRoutes(
     const merchant = req.session.merchantId
       ? await storage.getMerchant(req.session.merchantId)
       : null;
+
+    // #region agent log
+    console.log('[DEBUG] /api/auth/me success:', JSON.stringify({
+      userId: user.id,
+      merchantId: merchant?.id,
+      sessionId: req.sessionID,
+      hypothesisId: 'A,B,D'
+    }));
+    // #endregion
 
     res.json({
       user: { id: user.id, email: user.email, name: user.name },

@@ -1,7 +1,9 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { storage, generateApiKey, generateWebhookSecret } from "./storage";
+import { db, pool } from "./db";
 import { insertUserSchema, insertPaymentSchema, insertInvoiceSchema } from "@shared/schema";
 import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { z } from "zod";
@@ -87,10 +89,21 @@ export async function registerRoutes(
   // CORS middleware for API routes
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    // Allow same-origin and localhost origins
-    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
+    // Allow same-origin, localhost, and Vercel production domains
+    const allowedOrigins = [
+      'localhost',
+      '127.0.0.1',
+      'vercel.app',
+      'arcpaybeta.vercel.app', // Your production domain
+    ];
+    
+    if (origin) {
+      const isAllowed = allowedOrigins.some(allowed => origin.includes(allowed));
+      if (isAllowed) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      }
     }
+    
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key');
@@ -101,8 +114,17 @@ export async function registerRoutes(
     next();
   });
 
+  // Configure session store - use PostgreSQL for serverless compatibility
+  const PgSession = connectPgSimple(session);
+  const sessionStore = new PgSession({
+    pool: pool, // Use the PostgreSQL pool directly
+    tableName: "session", // Table name for sessions
+    createTableIfMissing: true, // Auto-create table if it doesn't exist
+  });
+
   app.use(
     session({
+      store: sessionStore,
       secret: process.env.SESSION_SECRET || "arc-pay-kit-secret-key",
       resave: false,
       saveUninitialized: false,
@@ -110,7 +132,7 @@ export async function registerRoutes(
         secure: process.env.NODE_ENV === "production",
         httpOnly: true,
         sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       },
     })
   );
@@ -262,13 +284,19 @@ export async function registerRoutes(
         
         if (!merchant) {
           // Create merchant if doesn't exist
-          merchant = await storage.createMerchant({
+          const newMerchant = await storage.createMerchant({
             userId: user.id,
             name: `${user.name}'s Business`,
             apiKey: generateApiKey(),
             webhookSecret: generateWebhookSecret(),
             walletAddress: normalizedAddress,
           });
+
+          if (!newMerchant) {
+            return res.status(500).json({ error: "Failed to create merchant" });
+          }
+
+          merchant = newMerchant;
 
           // Create treasury balances
           await storage.createTreasuryBalance({
@@ -287,8 +315,15 @@ export async function registerRoutes(
           if (!merchant.walletAddress) {
             await storage.updateMerchant(merchant.id, { walletAddress: normalizedAddress });
             // Refresh merchant to get updated wallet address
-            merchant = await storage.getMerchant(merchant.id);
+            const updatedMerchant = await storage.getMerchant(merchant.id);
+            if (updatedMerchant) {
+              merchant = updatedMerchant;
+            }
           }
+        }
+
+        if (!merchant) {
+          return res.status(500).json({ error: "Failed to create or retrieve merchant" });
         }
 
         req.session.userId = user.id;
@@ -304,9 +339,29 @@ export async function registerRoutes(
           } : null,
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Wallet login error:", error);
-      res.status(500).json({ error: "Wallet login failed" });
+      // Provide more detailed error information for debugging
+      const errorMessage = error?.message || "Unknown error";
+      const isDatabaseError = errorMessage.includes("DATABASE_URL") || 
+                               errorMessage.includes("connection") ||
+                               errorMessage.includes("timeout") ||
+                               error?.code === "ECONNREFUSED" ||
+                               error?.code === "ETIMEDOUT";
+      
+      if (isDatabaseError) {
+        res.status(500).json({ 
+          error: "Database connection failed",
+          message: "Unable to connect to the database. Please check your DATABASE_URL environment variable.",
+          details: process.env.NODE_ENV === "development" ? errorMessage : undefined
+        });
+      } else {
+        res.status(500).json({ 
+          error: "Authentication failed",
+          message: errorMessage,
+          details: process.env.NODE_ENV === "development" ? error?.stack : undefined
+        });
+      }
     }
   });
 

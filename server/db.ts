@@ -56,3 +56,4 @@ pool.on("remove", () => {
 });
 
 export const db = drizzle(pool, { schema });
+export { pool };

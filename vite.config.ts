@@ -28,6 +28,11 @@ export default defineConfig(async () => {
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      // Stub out SES modules - they break wallet SDKs
+      "ses": path.resolve(import.meta.dirname, "client", "src", "lib", "ses-stub.ts"),
+      "@endo/ses": path.resolve(import.meta.dirname, "client", "src", "lib", "ses-stub.ts"),
+      "@endo/lockdown": path.resolve(import.meta.dirname, "client", "src", "lib", "ses-stub.ts"),
+      "@agoric/ses": path.resolve(import.meta.dirname, "client", "src", "lib", "ses-stub.ts"),
     },
   },
   root: path.resolve(import.meta.dirname, "client"),
@@ -80,7 +85,7 @@ export default defineConfig(async () => {
         entryFileNames: 'assets/js/[name]-[hash].js',
         assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
       },
-      external: [], // Don't externalize anything - bundle everything
+      external: ['ses', '@endo/ses', '@endo/lockdown', '@agoric/ses'], // Exclude SES - breaks wallet SDKs
     },
     chunkSizeWarningLimit: 1000,
     cssCodeSplit: true,
@@ -105,7 +110,7 @@ export default defineConfig(async () => {
   },
   optimizeDeps: {
     include: ["react", "react-dom", "@tanstack/react-query"],
-    exclude: [],
+    exclude: ['ses', '@endo/ses', '@endo/lockdown', '@agoric/ses'],
     esbuildOptions: {
       target: "esnext",
     },

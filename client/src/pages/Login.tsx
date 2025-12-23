@@ -1,20 +1,21 @@
 import { useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Wallet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import LazyRainbowKit from "@/lib/LazyRainbowKit";
 
 /**
- * Login Page - Wallet-based authentication
- * 
- * Users connect their Web3 wallet to access the dashboard.
+ * Login Content - Uses wallet hooks
+ * Hooks can be imported here because this component only renders
+ * after LazyRainbowKit loads the providers
  */
-export default function Login() {
+function LoginContent() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { address, isConnected } = useAccount();
@@ -56,11 +57,10 @@ export default function Login() {
       hasRedirected.current = true;
       walletAuthMutation.mutate(address);
     }
-  }, [isConnected, address]);
+  }, [isConnected, address, walletAuthMutation]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4" data-testid="page-login">
-
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -181,5 +181,17 @@ export default function Login() {
         </Card>
       </motion.div>
     </div>
+  );
+}
+
+/**
+ * Login Page - Wraps LoginContent with LazyRainbowKit
+ * This ensures wallet SDKs only load after window.onload
+ */
+export default function Login() {
+  return (
+    <LazyRainbowKit>
+      <LoginContent />
+    </LazyRainbowKit>
   );
 }

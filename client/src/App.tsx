@@ -2,13 +2,12 @@ import { lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { LazyWalletProvider } from "./lib/wallet-provider-lazy";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { TestModeProvider } from "@/hooks/useTestMode";
 import { Loader2 } from "lucide-react";
-// NOTE: RainbowKit styles are loaded lazily in wallet-provider-lazy.tsx
+// CRITICAL: NO wagmi/RainbowKit imports here - they cause SES to execute early
 
 // Lazy load pages for code splitting and faster initial load
 const Landing = lazy(() => import("@/pages/Landing"));
@@ -289,14 +288,12 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <LazyWalletProvider>
-        <TestModeProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </TestModeProvider>
-      </LazyWalletProvider>
+      <TestModeProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </TestModeProvider>
     </QueryClientProvider>
   );
 }

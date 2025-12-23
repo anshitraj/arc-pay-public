@@ -20,13 +20,13 @@ export function GasPriceDisplay() {
   });
 
   return (
-    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/20 border border-border/30 min-w-[90px] h-7">
+    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/20 border border-border min-w-[90px] h-7">
       <img 
         src="https://img.icons8.com/pin/100/gas-station.png" 
         alt="gas-station" 
         className="w-3 h-3 flex-shrink-0 opacity-50"
       />
-      <span className="text-[11px] font-medium whitespace-nowrap text-muted-foreground">
+      <span className="text-[10px] sm:text-[11px] font-medium whitespace-nowrap text-muted-foreground">
         {isLoadingGasPrice ? (
           <span>...</span>
         ) : gasPriceError ? (

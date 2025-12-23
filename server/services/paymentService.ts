@@ -4,7 +4,7 @@
  */
 
 import { db } from "../db.js";
-import { payments } from "../../shared/schema.js";
+import { payments, paymentAuditLogs } from "../../shared/schema.js";
 import { eq, and, lt, isNotNull, or } from "drizzle-orm";
 import { dispatchWebhook } from "./webhookService.js";
 import { verifyTransaction, getExplorerLink, getBlockTimestamp } from "./arcService.js";
@@ -26,12 +26,33 @@ export interface CreatePaymentRequest {
   expiresInMinutes?: number;
   isTest?: boolean;
   gasSponsored?: boolean; // Gas sponsorship preference
+  idempotencyKey?: string; // Idempotency key for duplicate request prevention
 }
 
 /**
- * Create a new payment
+ * Create a new payment (PaymentIntent)
+ * Supports idempotency via idempotencyKey
  */
 export async function createPayment(request: CreatePaymentRequest) {
+  // Check for existing payment with same idempotency key
+  if (request.idempotencyKey) {
+    const existingPayment = await db
+      .select()
+      .from(payments)
+      .where(
+        and(
+          eq(payments.merchantId, request.merchantId),
+          eq(payments.idempotencyKey, request.idempotencyKey)
+        )
+      )
+      .limit(1);
+
+    if (existingPayment.length > 0) {
+      // Return existing payment (idempotent)
+      return existingPayment[0];
+    }
+  }
+
   const expiresAt = request.expiresInMinutes
     ? new Date(Date.now() + request.expiresInMinutes * 60 * 1000)
     : new Date(Date.now() + 30 * 60 * 1000); // Default 30 minutes
@@ -61,10 +82,37 @@ export async function createPayment(request: CreatePaymentRequest) {
       isTest: request.isTest !== undefined ? request.isTest : true, // Default to test mode only if not provided
       expiresAt,
       metadata,
+      idempotencyKey: request.idempotencyKey || null,
     })
     .returning();
 
-  // Dispatch webhook (non-blocking)
+  // Create audit log
+  await db.insert(paymentAuditLogs).values({
+    paymentId: payment.id,
+    merchantId: payment.merchantId,
+    action: "created",
+    fromStatus: null,
+    toStatus: "created",
+    metadata: JSON.stringify({ idempotencyKey: request.idempotencyKey }),
+  }).catch(console.error);
+
+  // Dispatch webhooks (non-blocking)
+  // PaymentIntent events (new)
+  dispatchWebhook(request.merchantId, "payment.intent.created", {
+    type: "payment.intent.created",
+    data: {
+      id: payment.id,
+      amount: payment.amount,
+      currency: payment.currency,
+      settlementCurrency: payment.settlementCurrency,
+      status: payment.status,
+      merchantWallet: payment.merchantWallet,
+      expiresAt: payment.expiresAt,
+      idempotencyKey: payment.idempotencyKey,
+    },
+  }).catch(console.error);
+
+  // Legacy event (backward compatibility)
   dispatchWebhook(request.merchantId, "payment.created", {
     type: "payment.created",
     data: {
@@ -111,6 +159,8 @@ export async function confirmPayment(paymentId: string, txHash: string, payerWal
     }
   }
 
+  const oldStatus = payment.status;
+
   await db
     .update(payments)
     .set({
@@ -126,6 +176,18 @@ export async function confirmPayment(paymentId: string, txHash: string, payerWal
     .select()
     .from(payments)
     .where(eq(payments.id, paymentId));
+
+  // Create audit log for status change
+  if (updatedPayment) {
+    await db.insert(paymentAuditLogs).values({
+      paymentId: updatedPayment.id,
+      merchantId: updatedPayment.merchantId,
+      action: "status_changed",
+      fromStatus: oldStatus,
+      toStatus: "confirmed",
+      metadata: JSON.stringify({ txHash, payerWallet, settlementTime }),
+    }).catch(console.error);
+  }
 
   // Update treasury balance when payment is confirmed
   if (updatedPayment) {
@@ -188,14 +250,15 @@ export async function confirmPayment(paymentId: string, txHash: string, payerWal
     }
   }
 
-  // Dispatch webhook
+  // Dispatch webhooks
   if (updatedPayment) {
     const webhookPayload = {
-      type: "payment.succeeded",
+      type: "payment.intent.completed",
       data: {
         id: updatedPayment.id,
         amount: updatedPayment.amount,
         currency: updatedPayment.currency,
+        settlementCurrency: updatedPayment.settlementCurrency,
         status: "confirmed",
         txHash,
         payerWallet,
@@ -204,9 +267,14 @@ export async function confirmPayment(paymentId: string, txHash: string, payerWal
       },
     };
 
-    // Dispatch both payment.succeeded (primary) and payment.confirmed (for backward compatibility)
+    // PaymentIntent events (new)
     await Promise.all([
-      dispatchWebhook(payment.merchantId, "payment.succeeded", webhookPayload),
+      dispatchWebhook(payment.merchantId, "payment.intent.completed", webhookPayload),
+      // Legacy events (backward compatibility)
+      dispatchWebhook(payment.merchantId, "payment.succeeded", {
+        ...webhookPayload,
+        type: "payment.succeeded",
+      }),
       dispatchWebhook(payment.merchantId, "payment.confirmed", {
         ...webhookPayload,
         type: "payment.confirmed",
@@ -217,6 +285,13 @@ export async function confirmPayment(paymentId: string, txHash: string, payerWal
     recordPaymentProofOnChain(updatedPayment).catch((error) => {
       console.error("Failed to record payment proof on-chain:", error);
       // Don't throw - proof recording should not block payment confirmation
+    });
+
+    // Apply fees and splits (non-blocking, ledger-based)
+    const { applyFeesAndSplits } = await import("./feeSplitService.js");
+    applyFeesAndSplits(updatedPayment.id).catch((error) => {
+      console.error("Failed to apply fees and splits:", error);
+      // Don't throw - fee/split application should not block payment confirmation
     });
   }
 
@@ -236,6 +311,8 @@ export async function failPayment(paymentId: string, reason?: string) {
     throw new Error("Payment not found");
   }
 
+  const oldStatus = payment.status;
+
   await db
     .update(payments)
     .set({
@@ -250,18 +327,42 @@ export async function failPayment(paymentId: string, reason?: string) {
     .from(payments)
     .where(eq(payments.id, paymentId));
 
-  // Dispatch webhook
+  // Create audit log
   if (updatedPayment) {
-    await dispatchWebhook(payment.merchantId, "payment.failed", {
-      type: "payment.failed",
-      data: {
-        id: updatedPayment.id,
-        amount: updatedPayment.amount,
-        currency: updatedPayment.currency,
-        status: "failed",
-        reason,
-      },
-    });
+    await db.insert(paymentAuditLogs).values({
+      paymentId: updatedPayment.id,
+      merchantId: updatedPayment.merchantId,
+      action: "status_changed",
+      fromStatus: oldStatus,
+      toStatus: "failed",
+      metadata: JSON.stringify({ reason }),
+    }).catch(console.error);
+
+    // Dispatch webhooks
+    await Promise.all([
+      // PaymentIntent event (new)
+      dispatchWebhook(payment.merchantId, "payment.intent.failed", {
+        type: "payment.intent.failed",
+        data: {
+          id: updatedPayment.id,
+          amount: updatedPayment.amount,
+          currency: updatedPayment.currency,
+          status: "failed",
+          reason,
+        },
+      }),
+      // Legacy event (backward compatibility)
+      dispatchWebhook(payment.merchantId, "payment.failed", {
+        type: "payment.failed",
+        data: {
+          id: updatedPayment.id,
+          amount: updatedPayment.amount,
+          currency: updatedPayment.currency,
+          status: "failed",
+          reason,
+        },
+      }),
+    ]);
   }
 
   return updatedPayment;
@@ -284,6 +385,8 @@ export async function expirePayment(paymentId: string) {
     return payment; // Already final, don't expire
   }
 
+  const oldStatus = payment.status;
+
   await db
     .update(payments)
     .set({
@@ -296,6 +399,18 @@ export async function expirePayment(paymentId: string) {
     .select()
     .from(payments)
     .where(eq(payments.id, paymentId));
+
+  // Create audit log
+  if (updatedPayment) {
+    await db.insert(paymentAuditLogs).values({
+      paymentId: updatedPayment.id,
+      merchantId: updatedPayment.merchantId,
+      action: "status_changed",
+      fromStatus: oldStatus,
+      toStatus: "expired",
+      metadata: JSON.stringify({ reason: "expired" }),
+    }).catch(console.error);
+  }
 
   return updatedPayment;
 }
@@ -316,9 +431,12 @@ function isConnectionError(error: any): boolean {
     message.includes("econnreset") ||
     message.includes("econnrefused") ||
     message.includes("etimedout") ||
+    message.includes("enotfound") ||
+    message.includes("getaddrinfo") ||
     code === "econnreset" ||
     code === "econnrefused" ||
     code === "etimedout" ||
+    code === "enotfound" ||
     code === "57p01" || // PostgreSQL: terminating connection due to administrator command
     code === "57p02" || // PostgreSQL: terminating connection due to crash
     code === "57p03" || // PostgreSQL: terminating connection due to idle timeout

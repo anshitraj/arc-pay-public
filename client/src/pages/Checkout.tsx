@@ -19,7 +19,7 @@ import type { MerchantProfile } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useWallet } from "@/lib/wallet-rainbowkit";
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { getExplorerLink, getArcNetworkName, getArcChainId } from "@/lib/arc";
+import { getExplorerLink, getArcNetworkName } from "@/lib/arc";
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits } from 'viem';
 import { Input } from "@/components/ui/input";
@@ -155,27 +155,8 @@ export default function Checkout() {
     }
   }, [isConnected, isArcChain, switchToArcChain]);
 
-  // Validate chain before proceeding
-  const validateChain = async () => {
-    if (!isConnected || !address) {
-      throw new Error("Wallet not connected. Please connect your wallet first.");
-    }
-
-    if (!isArcChain) {
-      await switchToArcChain();
-      // Wait a bit for chain switch
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    const currentChainId = getArcChainId();
-    if (typeof window !== 'undefined' && (window as any).ethereum) {
-      const chainId = await (window as any).ethereum.request({ method: 'eth_chainId' });
-      const chainIdNum = parseInt(chainId, 16);
-      if (chainIdNum !== currentChainId) {
-        throw new Error(`Please switch to ARC Testnet (Chain ID: ${currentChainId})`);
-      }
-    }
-  };
+  // Chain validation is handled by RainbowKit/wagmi through isArcChain check
+  // The pay button is disabled when !isArcChain, so no need for explicit validation
 
   // USDC transfer transaction
   const { writeContract, data: txHash, isPending: isWriting, error: writeError } = useWriteContract();
@@ -223,7 +204,21 @@ export default function Checkout() {
       refetch(); // Refresh payment status
     } else if (txError || writeError) {
       setPaymentState("error");
-      const errorMsg = writeError?.message || txError?.message;
+      let errorMsg: string | null = null;
+      if (writeError) {
+        if (typeof writeError === 'object' && writeError !== null && 'message' in writeError) {
+          errorMsg = String((writeError as { message: unknown }).message);
+        } else if (typeof writeError === 'string') {
+          errorMsg = writeError;
+        }
+      }
+      if (!errorMsg && txError) {
+        if (typeof txError === 'object' && txError !== null && 'message' in txError) {
+          errorMsg = String((txError as { message: unknown }).message);
+        } else if (typeof txError === 'string') {
+          errorMsg = txError;
+        }
+      }
       if (errorMsg?.includes("RPC endpoint")) {
         setPaymentError("Network error: Please check your RPC connection and try again.");
       } else {
@@ -237,6 +232,7 @@ export default function Checkout() {
 
   // Handle payment status changes from backend polling
   useEffect(() => {
+    const currentState = paymentState;
     if (payment?.status === "confirmed") {
       setPaymentState("success");
       setSubmittedTxHash(null);
@@ -245,9 +241,9 @@ export default function Checkout() {
     } else if (payment?.status === "failed") {
       setPaymentState("error");
       setSubmittedTxHash(null);
-    } else if (payment?.status === "pending" && paymentState !== "success") {
-      // Only set to pending if we're not already in success state
-      if (paymentState === "idle" || paymentState === "processing") {
+    } else if (payment?.status === "pending") {
+      // Only set to pending if we're not already in success or error state
+      if (currentState === "idle" || currentState === "processing") {
         setPaymentState("pending");
       }
     }
@@ -275,8 +271,14 @@ export default function Checkout() {
         return;
       }
 
+      // Ensure we're on the correct chain (RainbowKit handles this, but double-check for safety)
+      if (!isArcChain) {
+        await switchToArcChain();
+        // Wait a bit for chain switch to complete
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
       setPaymentState("processing");
-      await validateChain();
 
       // Normalize and validate merchant wallet address
       const merchantWallet = (payment.merchantWallet.toLowerCase() as `0x${string}`);
@@ -419,9 +421,6 @@ export default function Checkout() {
       </header>
 
       <div className="flex-1 flex items-center justify-center p-4 relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl opacity-50" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/5 rounded-full blur-2xl" />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -429,24 +428,20 @@ export default function Checkout() {
         transition={{ duration: 0.5 }}
         className="relative z-10 w-full max-w-md"
       >
-        <Card className="bg-card/80 backdrop-blur-xl border-border shadow-2xl shadow-primary/5">
-          <CardHeader className="text-center pb-2">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              {merchantLogoUrl ? (
-                <img 
-                  src={merchantLogoUrl} 
-                  alt={merchantDisplayName}
-                  className="w-10 h-10 rounded-xl object-cover"
-                  onError={(e) => {
-                    // Hide image if it fails to load - icon will show below
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                  <Zap className="w-6 h-6 text-primary-foreground" />
-                </div>
-              )}
+        <Card className="border border-border">
+          <CardHeader className="text-center pb-4 pt-6">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <img 
+                src={merchantLogoUrl || "/user.svg"} 
+                alt={merchantDisplayName}
+                className="w-12 h-12 rounded-xl object-cover"
+                onError={(e) => {
+                  // Fallback to user.svg if merchant logo fails to load
+                  if (e.currentTarget.src !== `${window.location.origin}/user.svg`) {
+                    e.currentTarget.src = "/user.svg";
+                  }
+                }}
+              />
               <div className="flex items-center gap-2">
                 <span className="text-lg font-bold">{merchantDisplayName}</span>
                 {isVerified && (
@@ -466,8 +461,9 @@ export default function Checkout() {
               <p className="text-muted-foreground">{payment.description}</p>
             )}
           </CardHeader>
+          <div className="border-b border-border mx-6"></div>
 
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 pt-6">
             <AnimatePresence mode="wait">
               {paymentState === "success" ? (
                 <motion.div
@@ -584,27 +580,28 @@ export default function Checkout() {
                   className="space-y-6"
                 >
                   {/* Customer Information Fields */}
-                  <div className="space-y-4">
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground mb-2">Optional details</p>
                     <div className="space-y-2">
-                      <Label htmlFor="customer-name">Name</Label>
+                      <Label htmlFor="customer-name" className="text-sm text-muted-foreground">Name</Label>
                       <Input
                         id="customer-name"
                         type="text"
                         placeholder="Enter your name"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full"
+                        className="w-full h-9"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="customer-email">Email</Label>
+                      <Label htmlFor="customer-email" className="text-sm text-muted-foreground">Email</Label>
                       <Input
                         id="customer-email"
                         type="email"
                         placeholder="Enter your email"
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
-                        className="w-full"
+                        className="w-full h-9"
                       />
                     </div>
                   </div>
@@ -615,34 +612,41 @@ export default function Checkout() {
                       {amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </div>
                     <div className="text-sm text-muted-foreground mb-4">
-                      Settlement: {settlementCurrency} on Arc Network
+                      Pay with USDC
                     </div>
                   </div>
 
-                  {/* Payment Asset Selection */}
+                  {/* Payment Asset Selection - Only show if cross-chain payment is required */}
                   {supportedAssets && supportedAssets.length > 0 && (
                     <div className="space-y-2">
-                      <Label>Payment Method</Label>
+                      <Label>Pay with</Label>
                       <Select value={paymentAsset} onValueChange={setPaymentAsset}>
                         <SelectTrigger data-testid="select-payment-asset">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {supportedAssets.map((asset) => (
-                            <SelectItem key={asset.asset} value={asset.asset}>
-                              {asset.asset.replace("_", " on ")} {asset.requiresSwap && "(Swap)"} {asset.requiresBridge && "(Bridge)"}
-                            </SelectItem>
-                          ))}
+                          {supportedAssets.map((asset) => {
+                            // Simplify display - hide technical details
+                            const displayName = asset.asset === "USDC_ARC" 
+                              ? "USDC" 
+                              : asset.asset.replace("_", " ");
+                            return (
+                              <SelectItem key={asset.asset} value={asset.asset}>
+                                {displayName}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Choose how you want to pay. Conversion will happen automatically.
+                        Choose your payment method. Conversion happens automatically.
                       </p>
                     </div>
                   )}
 
-                  {/* Conversion Flow */}
-                  {paymentAsset && conversionEstimate && (
+                  {/* Conversion Flow - Only show if cross-chain payment is required */}
+                  {paymentAsset && conversionEstimate && 
+                   (conversionEstimate.steps?.length > 1 || paymentAsset !== "USDC_ARC") && (
                     <ConversionFlow
                       paymentAsset={paymentAsset}
                       settlementCurrency={settlementCurrency}
@@ -675,19 +679,19 @@ export default function Checkout() {
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
                       <Info className="w-3 h-3" />
-                      <span>All fees included. Merchant receives exact settlement amount.</span>
+                      <span>All fees included. Merchant receives exact settlement amount. ArcPay covers network fees where applicable.</span>
                     </div>
                   </div>
 
-                  {/* Gas Sponsorship Toggle */}
+                  {/* Gas Sponsorship Toggle - Simplified wording */}
                   <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/50">
                     <div className="space-y-0.5 flex-1">
                       <Label htmlFor="gas-sponsored" className="text-base flex items-center gap-2 cursor-pointer">
                         <Zap className="w-4 h-4" />
-                        Gas Sponsorship
+                        No gas fees for customers
                       </Label>
                       <p className="text-xs text-muted-foreground">
-                        Enable gas sponsorship via EIP-7702 where supported
+                        Merchant covers transaction fees where supported
                       </p>
                     </div>
                     <Switch
@@ -700,7 +704,7 @@ export default function Checkout() {
                     <Alert>
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription className="text-xs">
-                        Gas sponsorship is only available for supported transactions. You may still pay gas fees for unsupported operations.
+                        Gas sponsorship is enabled. You won't pay transaction fees for supported operations.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -739,19 +743,23 @@ export default function Checkout() {
                   )}
 
                   <Button
-                    className="w-full h-12 text-base"
+                    className="w-full h-14 text-base font-semibold transition-all hover:shadow-lg hover:shadow-primary/20 hover:scale-[1.01]"
                     onClick={handlePay}
-                    disabled={
-                      paymentState === "processing" || 
-                      paymentState === "pending" ||
-                      paymentState === "success" ||
-                      payment?.status === "confirmed" ||
-                      isWriting || 
-                      isWaiting ||
-                      !isConnected || 
-                      !address ||
-                      !isArcChain
-                    }
+                    disabled={(() => {
+                      type PaymentStateType = "idle" | "processing" | "pending" | "success" | "error";
+                      const state = paymentState as PaymentStateType;
+                      return state === "processing" || 
+                             state === "pending" ||
+                             state === "success" ||
+                             state === "error" ||
+                             payment?.status === "confirmed" ||
+                             payment?.status === "failed" ||
+                             isWriting || 
+                             isWaiting ||
+                             !isConnected || 
+                             !address ||
+                             !isArcChain;
+                    })()}
                     data-testid="button-pay"
                   >
                     {paymentState === "processing" || isWriting ? (
@@ -842,10 +850,12 @@ export default function Checkout() {
         </Card>
 
         <div className="text-center mt-6">
-          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-            <Zap className="w-3 h-3 mr-1" />
-            Powered by Arc Network
-          </Badge>
+          <div className="flex items-center justify-center gap-2">
+            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+              Powered by
+            </Badge>
+            <img src="/arc.webp" alt="Arc Network" className="h-6" />
+          </div>
         </div>
       </motion.div>
       </div>

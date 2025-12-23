@@ -7,6 +7,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { requireApiKey, optionalApiKey } from "../middleware/apiKeyAuth.js";
 import { rateLimit } from "../middleware/rateLimit.js";
+import { enforceTestLiveIsolation } from "../middleware/testLiveIsolation.js";
 import { createPayment, confirmPayment, failPayment, expirePayment } from "../services/paymentService.js";
 import { storage } from "../storage.js";
 import { getExplorerLink } from "../services/arcService.js";
@@ -21,11 +22,27 @@ const createPaymentSchema = z.object({
   estimatedFees: z.string().optional(),
   description: z.string().optional(),
   customerEmail: z.string().email("Invalid email").optional().or(z.literal("").transform(() => undefined)),
-  merchantWallet: z.string().refine((val) => /^0x[a-fA-F0-9]{40}$/.test(val), "Invalid wallet address"),
+  merchantWallet: z.string().refine((val) => /^0x[a-fA-F0-9]{40}$/.test(val), "Invalid wallet address").optional(),
   expiresInMinutes: z.coerce.number().int().positive().optional(),
   isTest: z.coerce.boolean().optional(),
   gasSponsored: z.coerce.boolean().optional().default(false),
+  idempotencyKey: z.string().optional(), // Idempotency key for duplicate request prevention
 });
+
+/**
+ * Infer isTest from API key prefix
+ */
+function inferIsTestFromApiKey(apiKey: string): boolean {
+  // Check if API key starts with test prefix
+  if (apiKey.startsWith("sk_arc_test_") || apiKey.startsWith("pk_arc_test_")) {
+    return true;
+  }
+  if (apiKey.startsWith("sk_arc_live_") || apiKey.startsWith("pk_arc_live_")) {
+    return false;
+  }
+  // Default to test mode for unknown prefixes (backward compatibility)
+  return true;
+}
 
 const confirmPaymentSchema = z.object({
   txHash: z.string().refine((val) => /^0x[a-fA-F0-9]{64}$/.test(val), "Invalid transaction hash"),
@@ -43,6 +60,7 @@ export function registerPaymentRoutes(app: Express) {
   app.post(
     "/api/payments/create",
     requireApiKey,
+    enforceTestLiveIsolation,
     rateLimit,
     async (req, res) => {
       try {
@@ -55,21 +73,74 @@ export function registerPaymentRoutes(app: Express) {
           return res.status(400).json({ error: result.error.errors[0].message });
         }
 
+        // Extract API key to infer isTest
+        const apiKey = req.headers.authorization?.replace("Bearer ", "") || 
+                      req.headers["x-api-key"] as string || 
+                      req.query.apiKey as string || "";
+        
+        // Infer defaults
+        const inferredIsTest = result.data.isTest !== undefined 
+          ? result.data.isTest 
+          : inferIsTestFromApiKey(apiKey);
+
+        // Get merchant wallet - use provided, or merchant's walletAddress, or try to get from profile
+        let merchantWallet = result.data.merchantWallet;
+        if (!merchantWallet) {
+          merchantWallet = req.merchant.walletAddress || undefined;
+          
+          // If still no wallet, try to get default wallet from merchant profile
+          if (!merchantWallet && req.merchant.walletAddress) {
+            try {
+              const profile = await storage.getMerchantProfile(req.merchant.walletAddress);
+              // For now, use merchant.walletAddress as default
+              // In future, could use profile.defaultWallet if that field exists
+              merchantWallet = req.merchant.walletAddress;
+            } catch (error) {
+              // Silently fail
+            }
+          }
+        }
+
+        if (!merchantWallet) {
+          return res.status(400).json({ 
+            error: "Merchant wallet address is required. Please set your wallet address in settings or provide merchantWallet in the request." 
+          });
+        }
+
+        // Check merchant verification status (on-chain badge check)
+        const { isMerchantVerified } = await import("../services/badgeService.js");
+        const isVerified = await isMerchantVerified(req.merchant.id);
+        
+        // Get updated merchant status (may have been updated by isMerchantVerified)
+        const updatedMerchant = await storage.getMerchant(req.merchant.id);
+        const merchantStatus = updatedMerchant?.status || req.merchant.status || "demo";
+        
+        // Demo merchants can only create test payments (unless verified)
+        if (!isVerified && merchantStatus === "demo" && !inferredIsTest) {
+          return res.status(403).json({ 
+            error: "Demo merchants can only create test payments. Complete business verification to create live payments." 
+          });
+        }
+
+        // Verified merchants can create both test and live payments
+        // pending_verification merchants can create test payments only (same as demo)
+
         const payment = await createPayment({
           merchantId: req.merchant.id,
           amount: result.data.amount,
           currency: result.data.currency || "USDC",
           settlementCurrency: result.data.settlementCurrency || "USDC",
-          paymentAsset: result.data.paymentAsset,
-          paymentChainId: result.data.paymentChainId,
+          paymentAsset: result.data.paymentAsset || undefined, // Default to ARC USDC if not provided
+          paymentChainId: result.data.paymentChainId, // Will be inferred if not provided
           conversionPath: result.data.conversionPath,
           estimatedFees: result.data.estimatedFees,
           description: result.data.description,
           customerEmail: result.data.customerEmail,
-          merchantWallet: result.data.merchantWallet,
+          merchantWallet: merchantWallet,
           expiresInMinutes: result.data.expiresInMinutes,
-          isTest: result.data.isTest,
+          isTest: inferredIsTest,
           gasSponsored: result.data.gasSponsored || false,
+          idempotencyKey: result.data.idempotencyKey,
         });
 
         // Generate checkout URL
@@ -95,7 +166,7 @@ export function registerPaymentRoutes(app: Express) {
   );
 
   // Get payment by ID
-  app.get("/api/payments/:id", requireApiKey, rateLimit, async (req, res) => {
+  app.get("/api/payments/:id", requireApiKey, enforceTestLiveIsolation, rateLimit, async (req, res) => {
     try {
       if (!req.merchant) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -111,9 +182,26 @@ export function registerPaymentRoutes(app: Express) {
         return res.status(403).json({ error: "Access denied" });
       }
 
+      // Get merchant profile if merchantWallet is available
+      let merchantProfile = null;
+      if (payment.merchantWallet) {
+        try {
+          // Normalize wallet address to lowercase for lookup
+          const normalizedWallet = payment.merchantWallet.toLowerCase();
+          merchantProfile = await storage.getMerchantProfile(normalizedWallet);
+        } catch (error) {
+          // Silently fail if profile doesn't exist
+          console.error("Error fetching merchant profile:", error);
+        }
+      }
+
       res.json({
         ...payment,
         explorerLink: payment.txHash ? getExplorerLink(payment.txHash) : null,
+        merchantProfile: merchantProfile ? {
+          businessName: merchantProfile.businessName,
+          logoUrl: merchantProfile.logoUrl,
+        } : null,
       });
     } catch (error) {
       console.error("Get payment error:", error);

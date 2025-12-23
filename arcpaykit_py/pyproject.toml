@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arcpaykit"
-version = "0.1.0"
+version = "0.2.0"
 description = "Official ArcPay Python SDK for accepting stablecoin payments"
 readme = "README.md"
 requires-python = ">=3.7"

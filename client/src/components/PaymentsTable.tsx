@@ -100,9 +100,9 @@ export function PaymentsTable({ payments, loading, onRefund, search = "" }: Paym
   }
 
   return (
-    <div className="border border-border/30 rounded-xl bg-card/40 overflow-hidden" data-testid="payments-table">
-      <div className="px-6 py-4 border-b border-border/30 bg-card/60">
-        <h2 className="text-base font-semibold">Recent Payments</h2>
+    <div className="border border-border rounded-lg bg-card overflow-hidden" data-testid="payments-table">
+      <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-border">
+        <h2 className="text-sm sm:text-base font-semibold">Recent Payments</h2>
       </div>
       <div className="overflow-x-auto">
         {filteredPayments.length === 0 ? (
@@ -111,8 +111,8 @@ export function PaymentsTable({ payments, loading, onRefund, search = "" }: Paym
           </div>
         ) : (
           <Table>
-            <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
-              <TableRow className="border-b border-border/30 hover:bg-transparent">
+            <TableHeader className="sticky top-0 z-10 bg-card">
+              <TableRow className="border-b border-border hover:bg-transparent">
                 <TableHead className="h-10 font-semibold text-xs text-muted-foreground uppercase tracking-wider">ID</TableHead>
                 <TableHead className="h-10 font-semibold text-xs text-muted-foreground uppercase tracking-wider">Amount</TableHead>
                 <TableHead className="h-10 font-semibold text-xs text-muted-foreground uppercase tracking-wider">Status</TableHead>
@@ -129,7 +129,7 @@ export function PaymentsTable({ payments, loading, onRefund, search = "" }: Paym
                 <TableRow
                   key={payment.id}
                   data-testid={`payment-row-${payment.id}`}
-                  className="cursor-pointer border-b border-border/20 hover:bg-muted/20 group transition-colors"
+                  className="cursor-pointer border-b border-border hover:bg-muted/30 group transition-colors"
                   onClick={() => setLocation(`/dashboard/payments/${payment.id}`)}
                 >
                     <TableCell className="font-mono text-sm py-3.5">
@@ -181,7 +181,7 @@ export function PaymentsTable({ payments, loading, onRefund, search = "" }: Paym
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground py-3.5 text-sm">
-                      {payment.customerEmail || "-"}
+                      {payment.customerEmail || "No email address"}
                     </TableCell>
                     <TableCell className="text-muted-foreground py-3.5 text-sm">
                       {formatDate(payment.createdAt)}
@@ -255,16 +255,6 @@ export function PaymentsTable({ payments, loading, onRefund, search = "" }: Paym
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
-                              const checkoutUrl = `${window.location.origin}/checkout/${payment.id}`;
-                              copyToClipboard(checkoutUrl, "Payment link");
-                            }}
-                          >
-                            <Share2 className="w-4 h-4 mr-2" />
-                            Share
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
                               setLocation(`/dashboard/payments/${payment.id}`);
                             }}
                           >
@@ -330,25 +320,59 @@ const INVOICE_PAYMENT_PROOF_ADDRESS = (import.meta.env.VITE_INVOICE_PAYMENT_PROO
 
 // Component to display proof status for a payment
 function PaymentProofStatus({ paymentId, status, payment }: { paymentId: string; status: string; payment: Payment }) {
+  const { toast } = useToast();
   const { data: proofStatus } = useQuery<{ exists: boolean; proofTxHash?: string; eligible?: boolean }>({
     queryKey: [`/api/payments/${paymentId}/proof`],
     enabled: status === "confirmed",
     refetchInterval: 30000, // Refetch every 30s
   });
 
+  const handleShare = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const checkoutUrl = `${window.location.origin}/checkout/${payment.id}`;
+    navigator.clipboard.writeText(checkoutUrl);
+    toast({
+      title: "Copied",
+      description: "Payment link copied to clipboard",
+    });
+  };
+
   if (status !== "confirmed") {
-    return <span className="text-muted-foreground text-sm">-</span>;
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleShare}
+          className="flex items-center gap-1 hover:text-primary transition-colors"
+          title="Copy payment link"
+        >
+          <Share2 className="w-3 h-3" />
+          <span className="text-xs text-muted-foreground hover:text-primary">Share</span>
+        </button>
+      </div>
+    );
   }
 
   if (proofStatus?.exists && proofStatus.proofTxHash) {
     return (
-      <div className="flex items-center gap-1.5">
-        <img 
-          src="/verifiedmerchant.webp" 
-          alt="Verified On-chain Receipt" 
-          className="w-5 h-5 object-contain"
-        />
-        <span className="text-xs text-green-500">On-chain</span>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <img 
+            src="/verifiedmerchant.webp" 
+            alt="Verified On-chain Receipt" 
+            className="w-5 h-5 object-contain"
+          />
+          <span className="text-xs text-green-500">On-chain</span>
+        </div>
+        <button
+          onClick={handleShare}
+          className="flex items-center gap-1 hover:text-primary transition-colors"
+          title="Copy payment link"
+        >
+          <Share2 className="w-3 h-3" />
+          <span className="text-xs text-muted-foreground hover:text-primary">Share</span>
+        </button>
       </div>
     );
   }
@@ -356,12 +380,32 @@ function PaymentProofStatus({ paymentId, status, payment }: { paymentId: string;
   // Show clickable button if eligible to record
   if (proofStatus?.eligible) {
     return (
-      <RecordReceiptButton payment={payment} />
+      <div className="flex items-center gap-2">
+        <RecordReceiptButton payment={payment} />
+        <button
+          onClick={handleShare}
+          className="flex items-center gap-1 hover:text-primary transition-colors"
+          title="Copy payment link"
+        >
+          <Share2 className="w-3 h-3" />
+          <span className="text-xs text-muted-foreground hover:text-primary">Share</span>
+        </button>
+      </div>
     );
   }
 
   return (
-    <span className="text-xs text-muted-foreground">Pending</span>
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-muted-foreground">Pending</span>
+      <button
+        onClick={handleShare}
+        className="flex items-center gap-1 hover:text-primary transition-colors"
+        title="Copy payment link"
+      >
+        <Share2 className="w-3 h-3" />
+        <span className="text-xs text-muted-foreground hover:text-primary">Share</span>
+      </button>
+    </div>
   );
 }
 

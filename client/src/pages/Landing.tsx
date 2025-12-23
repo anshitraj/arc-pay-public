@@ -3,6 +3,7 @@ import { Hero } from "@/components/Hero";
 import { FeatureGrid } from "@/components/FeatureGrid";
 import { CodeBlock } from "@/components/CodeBlock";
 import { Footer } from "@/components/Footer";
+import { AppBackground } from "@/components/AppBackground";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { motion } from "framer-motion";
@@ -19,7 +20,7 @@ const stats = [
 export default function Landing() {
 
   return (
-    <div className="min-h-screen bg-background" data-testid="page-landing">
+    <AppBackground data-testid="page-landing">
       <Navbar />
       <Hero />
       <FeatureGrid />
@@ -46,7 +47,7 @@ export default function Landing() {
                     <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
                       <stat.icon className="w-6 h-6 text-primary" />
                     </div>
-                    <div className="text-3xl sm:text-4xl font-bold tracking-tight mb-1 bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
+                    <div className="text-3xl sm:text-4xl font-bold tracking-tight mb-1 text-primary">
                       {stat.value}
                     </div>
                     <div className="text-sm text-muted-foreground">{stat.label}</div>
@@ -72,7 +73,7 @@ export default function Landing() {
           >
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-4">
               Powerful dashboard for
-              <span className="block bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
+              <span className="block text-primary">
                 complete visibility
               </span>
             </h2>
@@ -89,7 +90,7 @@ export default function Landing() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="relative"
           >
-            <div className="bg-card rounded-2xl border border-border p-4 shadow-2xl shadow-primary/5">
+            <div className="bg-card rounded-lg border border-border p-4">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-3 h-3 rounded-full bg-red-500" />
                 <div className="w-3 h-3 rounded-full bg-yellow-500" />
@@ -122,8 +123,6 @@ export default function Landing() {
                 <span className="text-muted-foreground">Payment analytics chart</span>
               </div>
             </div>
-            <div className="absolute -bottom-6 -right-6 w-48 h-48 bg-primary/10 rounded-full blur-3xl" />
-            <div className="absolute -top-6 -left-6 w-32 h-32 bg-primary/5 rounded-full blur-2xl" />
           </motion.div>
         </div>
       </section>
@@ -135,13 +134,12 @@ export default function Landing() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="relative bg-gradient-to-br from-primary/20 via-card to-card rounded-3xl border border-border p-8 sm:p-12 lg:p-16 text-center overflow-hidden"
+            className="relative bg-card rounded-lg border border-border p-8 sm:p-12 lg:p-16 text-center"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
             <div className="relative z-10">
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-4">
                 Ready to accept
-                <span className="block bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
+                <span className="block text-primary">
                   stablecoin payments?
                 </span>
               </h2>
@@ -168,7 +166,7 @@ export default function Landing() {
       </section>
 
       <Footer />
-    </div>
+    </AppBackground>
   );
 }
 

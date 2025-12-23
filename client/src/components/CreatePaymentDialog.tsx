@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -161,12 +162,13 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button 
-          className="gap-1.5 h-7 px-3 text-xs font-medium" 
+          className="gap-1.5 h-7 px-2 sm:px-3 text-xs font-medium" 
           data-testid="button-create-payment"
           disabled={isCheckingVerification || !isVerified}
         >
           <Plus className="w-3 h-3" />
-          Create Payment
+          <span className="hidden sm:inline">Create Payment</span>
+          <span className="sm:hidden">Create</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md rounded-lg max-h-[90vh] flex flex-col p-0" data-testid="dialog-create-payment">
@@ -199,9 +201,8 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
                   <FormItem>
                     <FormLabel>Amount</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
+                      <NumberInput
+                        step={0.01}
                         min="0"
                         placeholder="0.00"
                         {...field}
@@ -309,9 +310,8 @@ export function CreatePaymentDialog({ merchantId }: CreatePaymentDialogProps) {
                   render={({ field }) => (
                     <FormItem className="flex-1">
                       <FormControl>
-                        <Input
-                          type="number"
-                          step="1"
+                        <NumberInput
+                          step={1}
                           min="1"
                           placeholder="30"
                           {...field}

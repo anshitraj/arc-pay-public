@@ -39,11 +39,31 @@ export default defineConfig(async () => {
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'wallet-vendor': ['wagmi', '@rainbow-me/rainbowkit', 'viem'],
-          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select'],
-          'query-vendor': ['@tanstack/react-query'],
+        manualChunks: (id) => {
+          // Split node_modules into vendor chunks
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'react-vendor';
+            }
+            if (id.includes('wagmi') || id.includes('@rainbow-me') || id.includes('viem')) {
+              return 'wallet-vendor';
+            }
+            if (id.includes('@radix-ui')) {
+              return 'ui-vendor';
+            }
+            if (id.includes('@tanstack/react-query')) {
+              return 'query-vendor';
+            }
+            if (id.includes('framer-motion')) {
+              return 'motion-vendor';
+            }
+            // Other vendor code
+            return 'vendor';
+          }
+          // Split dashboard pages into separate chunks
+          if (id.includes('/pages/Dashboard')) {
+            return 'dashboard-pages';
+          }
         },
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
@@ -68,8 +88,11 @@ export default defineConfig(async () => {
     },
   },
   optimizeDeps: {
-    include: ["react", "react-dom"],
+    include: ["react", "react-dom", "@tanstack/react-query"],
     exclude: [],
+    esbuildOptions: {
+      target: "esnext",
+    },
   },
   define: {
     global: 'globalThis',

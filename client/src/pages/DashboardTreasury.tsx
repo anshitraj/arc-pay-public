@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { StatusIndicator } from "@/components/StatusIndicator";
 import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,10 +25,14 @@ export default function DashboardTreasury() {
 
   const { data: payments = [], refetch: refetchPayments } = useQuery<Payment[]>({
     queryKey: ["/api/payments"],
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const { data: treasuryBalances = [], refetch: refetchBalances } = useQuery<TreasuryBalance[]>({
     queryKey: ["/api/treasury"],
+    staleTime: 10 * 1000, // 10 seconds - balances change more frequently
+    gcTime: 2 * 60 * 1000, // 2 minutes
   });
 
   // Filter payments by test mode
@@ -62,14 +67,20 @@ export default function DashboardTreasury() {
   };
 
 
-  const style = { "--sidebar-width": "260px", "--sidebar-width-icon": "3rem" };
+  const style = { 
+    "--sidebar-width": "var(--sidebar-width-expanded, 260px)", 
+    "--sidebar-width-icon": "var(--sidebar-width-collapsed, 72px)" 
+  };
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full" data-testid="page-dashboard-treasury">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+          <header 
+            className="flex items-center justify-between gap-4 px-6 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0"
+            style={{ height: 'var(--app-header-height)' }}
+          >
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-6 w-6" />
               <div>
@@ -79,6 +90,7 @@ export default function DashboardTreasury() {
             </div>
             <div className="flex items-center gap-3">
               <GasPriceDisplay />
+              <StatusIndicator />
               <TestModeToggle />
             </div>
           </header>

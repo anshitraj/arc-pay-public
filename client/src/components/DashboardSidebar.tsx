@@ -10,6 +10,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,8 +32,13 @@ import {
   Shield,
   ArrowLeftRight,
   Award,
+  Repeat,
+  ArrowDownToLine,
+  Percent,
+  Plug,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -47,9 +53,12 @@ const mainNavItems = [
   { title: "QR Codes", icon: QrCode, href: "/dashboard/qr-codes" },
   { title: "Transactions", icon: CreditCard, href: "/dashboard/transactions" },
   { title: "Invoices", icon: FileText, href: "/dashboard/invoices" },
+  { title: "Subscriptions", icon: Repeat, href: "/dashboard/subscriptions" },
+  { title: "Payouts", icon: ArrowDownToLine, href: "/dashboard/payouts" },
   { title: "Customers", icon: Users, href: "/dashboard/customers" },
   { title: "Balances", icon: Wallet, href: "/dashboard/treasury" },
   { title: "Bridge (CCTP)", icon: ArrowLeftRight, href: "/dashboard/bridge" },
+  { title: "Fees & Splits", icon: Percent, href: "/dashboard/fees" },
   { title: "Reports", icon: BarChart3, href: "/dashboard/reports" },
   { title: "Claim your badge", icon: Award, href: "/dashboard/settings#badge-claim" },
 ];
@@ -58,6 +67,7 @@ const developersNavItems = [
   { title: "API Keys", icon: Key, href: "/developers/api-keys" },
   { title: "Webhooks", icon: Webhook, href: "/developers/webhooks" },
   { title: "API Logs", icon: FileTextIcon, href: "/developers/api-logs" },
+  { title: "Integrations", icon: Plug, href: "/dashboard/integrations" },
 ];
 
 const settingsNavItems = [
@@ -67,7 +77,7 @@ const settingsNavItems = [
 
 function UserProfile() {
   const { user, merchant } = useAuth();
-  const { displayName, walletAddress } = useMerchantProfile();
+  const { displayName, walletAddress, logoUrl } = useMerchantProfile();
   const [, setLocation] = useLocation();
   const { disconnect } = useDisconnect();
   const queryClient = useQueryClient();
@@ -121,11 +131,12 @@ function UserProfile() {
   return (
     <>
       <div className="flex items-center gap-2.5 mb-3">
-        <div className="w-8 h-8 rounded-md bg-sidebar-accent flex items-center justify-center">
-          <span className="text-xs font-medium text-sidebar-accent-foreground">
+        <Avatar className="w-8 h-8 rounded-md">
+          <AvatarImage src={logoUrl || undefined} alt={displayName} />
+          <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs font-medium rounded-md">
             {getInitials(displayName)}
-          </span>
-        </div>
+          </AvatarFallback>
+        </Avatar>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-medium truncate text-sidebar-foreground">
@@ -159,6 +170,8 @@ function UserProfile() {
 
 export function DashboardSidebar() {
   const [location] = useLocation();
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
 
   const isActive = (href: string) => {
     if (href === "/dashboard") {
@@ -168,14 +181,69 @@ export function DashboardSidebar() {
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader className="px-4 pt-5 pb-4 border-b border-sidebar-border/50">
-        <Link href="/" className="flex items-center gap-2" data-testid="sidebar-logo">
-          <img src="/arcpay.webp" alt="ArcPayKit" className="h-8 w-auto" />
-        </Link>
-      </SidebarHeader>
+    <Sidebar 
+      className="relative border-r border-white/5 group-data-[collapsible=offcanvas]:border-0" 
+      collapsible="offcanvas"
+      style={{
+        background: `
+          /* Arc-inspired gradient background matching dashboard */
+          radial-gradient(ellipse at top left, rgba(15, 42, 68, 0.4) 0%, transparent 60%),
+          linear-gradient(180deg, #0a1a2a 0%, #081726 50%, #050b14 100%)
+        `
+      }}
+    >
+      {/* Subtle Arc curve decoration - top-left sweep */}
+      <svg 
+        className="absolute top-0 left-0 w-full h-40 pointer-events-none opacity-[0.06] z-0"
+        viewBox="0 0 260 160"
+        preserveAspectRatio="none"
+        style={{ mixBlendMode: 'screen' }}
+      >
+        <path 
+          d="M 0 0 Q 130 50 260 0" 
+          stroke="rgba(59, 130, 246, 0.4)" 
+          fill="none" 
+          strokeWidth="2"
+        />
+      </svg>
+      
+      {/* Subtle radial glow at top-left */}
+      <div 
+        className="absolute top-0 left-0 w-64 h-64 pointer-events-none opacity-[0.05] z-0"
+        style={{
+          background: 'radial-gradient(ellipse at top left, rgba(59, 130, 246, 0.3) 0%, transparent 70%)',
+          mixBlendMode: 'screen'
+        }}
+      />
+      
+      {/* Subtle inner shadow for depth */}
+      <div 
+        className="absolute inset-0 pointer-events-none z-0"
+        style={{
+          boxShadow: 'inset 1px 0 0 rgba(255, 255, 255, 0.03)'
+        }}
+      />
+      
+      <div className="relative z-10 flex flex-col h-full">
+        <SidebarHeader 
+          className="!flex !flex-row !items-center !justify-center px-0 py-0 !gap-0 border-b border-white/5"
+          style={{ height: 'var(--app-header-height)' }}
+        >
+          <Link 
+            href="/" 
+            className="flex items-center justify-center w-full h-full transition-all duration-200 ease-in-out" 
+            data-testid="sidebar-logo"
+          >
+            <img 
+              src="/arcpay.webp" 
+              alt="ArcPayKit" 
+              className="h-7 w-auto block align-middle transition-all duration-200 ease-in-out" 
+              style={{ verticalAlign: 'middle' }}
+            />
+          </Link>
+        </SidebarHeader>
 
-      <SidebarContent className="px-3 py-4">
+        <SidebarContent className="px-3 py-4 flex-1 overflow-auto">
         <SidebarGroup>
           <SidebarGroupLabel className="px-3 mb-2 text-[11px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider">
             MENU
@@ -193,8 +261,8 @@ export function DashboardSidebar() {
                       className={cn(
                         "h-9 px-3 rounded-lg font-medium transition-all duration-200 relative group",
                         active
-                          ? "bg-sidebar-accent/60 text-sidebar-foreground shadow-sm"
-                          : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/20"
+                          ? "text-sidebar-foreground bg-sidebar-accent/30 backdrop-blur-sm"
+                          : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/20 hover:backdrop-blur-sm"
                       )}
                     >
                       <Link href={item.href} className="flex items-center gap-2.5 w-full">
@@ -203,8 +271,8 @@ export function DashboardSidebar() {
                         )}
                         <item.icon
                           className={cn(
-                            "w-4 h-4 transition-colors flex-shrink-0",
-                            active ? "text-sidebar-foreground" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
+                            "w-4 h-4 transition-colors flex-shrink-0 stroke-[1.5]",
+                            active ? "text-primary" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
                           )}
                         />
                         <span className="flex-1">{item.title}</span>
@@ -234,8 +302,8 @@ export function DashboardSidebar() {
                       className={cn(
                         "h-9 px-3 rounded-lg font-medium transition-all duration-200 relative group",
                         active
-                          ? "bg-sidebar-accent/60 text-sidebar-foreground shadow-sm"
-                          : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/20"
+                          ? "text-sidebar-foreground bg-sidebar-accent/30 backdrop-blur-sm"
+                          : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/20 hover:backdrop-blur-sm"
                       )}
                     >
                       <Link href={item.href} className="flex items-center gap-2.5 w-full">
@@ -244,8 +312,8 @@ export function DashboardSidebar() {
                         )}
                         <item.icon
                           className={cn(
-                            "w-4 h-4 transition-colors flex-shrink-0",
-                            active ? "text-sidebar-foreground" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
+                            "w-4 h-4 transition-colors flex-shrink-0 stroke-[1.5]",
+                            active ? "text-primary" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
                           )}
                         />
                         <span className="flex-1">{item.title}</span>
@@ -275,8 +343,8 @@ export function DashboardSidebar() {
                       className={cn(
                         "h-9 px-3 rounded-lg font-medium transition-all duration-200 relative group",
                         active
-                          ? "bg-sidebar-accent/60 text-sidebar-foreground shadow-sm"
-                          : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/20"
+                          ? "text-sidebar-foreground bg-sidebar-accent/30 backdrop-blur-sm"
+                          : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/20 hover:backdrop-blur-sm"
                       )}
                     >
                       <Link href={item.href} className="flex items-center gap-2.5 w-full">
@@ -285,8 +353,8 @@ export function DashboardSidebar() {
                         )}
                         <item.icon
                           className={cn(
-                            "w-4 h-4 transition-colors flex-shrink-0",
-                            active ? "text-sidebar-foreground" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
+                            "w-4 h-4 transition-colors flex-shrink-0 stroke-[1.5]",
+                            active ? "text-primary" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70"
                           )}
                         />
                         <span className="flex-1">{item.title}</span>
@@ -300,9 +368,10 @@ export function DashboardSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="px-3 py-4 border-t border-sidebar-border/50">
-        <UserProfile />
-      </SidebarFooter>
+        <SidebarFooter className="px-3 py-4 border-t border-white/5">
+          <UserProfile />
+        </SidebarFooter>
+      </div>
     </Sidebar>
   );
 }

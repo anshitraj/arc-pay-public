@@ -13,6 +13,7 @@ export class ArcPay {
 // Export types
 export type {
   CreatePaymentRequest,
+  SimpleCreatePaymentRequest,
   CreatePaymentResponse,
   Payment,
   ConfirmPaymentRequest,

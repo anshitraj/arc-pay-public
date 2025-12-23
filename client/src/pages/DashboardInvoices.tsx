@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -39,6 +40,7 @@ import type { Invoice } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { StatusIndicator } from "@/components/StatusIndicator";
 import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { exportInvoicesToCSV, exportInvoiceToCSV } from "@/lib/csvExport";
 import {
@@ -72,6 +74,8 @@ export default function DashboardInvoices() {
 
   const { data: invoices = [], isLoading } = useQuery<Invoice[]>({
     queryKey: ["/api/invoices"],
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const form = useForm<InvoiceFormData>({
@@ -126,14 +130,20 @@ export default function DashboardInvoices() {
     toast({ title: "Export Started", description: "Invoice CSV export has been downloaded." });
   };
 
-  const style = { "--sidebar-width": "260px", "--sidebar-width-icon": "3rem" };
+  const style = { 
+    "--sidebar-width": "var(--sidebar-width-expanded, 260px)", 
+    "--sidebar-width-icon": "var(--sidebar-width-collapsed, 72px)" 
+  };
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full" data-testid="page-dashboard-invoices">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+          <header 
+            className="flex items-center justify-between gap-4 px-6 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0"
+            style={{ height: 'var(--app-header-height)' }}
+          >
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-6 w-6" />
               <div>
@@ -143,6 +153,7 @@ export default function DashboardInvoices() {
             </div>
             <div className="flex items-center gap-3">
               <GasPriceDisplay />
+              <StatusIndicator />
               <TestModeToggle />
               {invoices.length > 0 && (
                 <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-7 text-xs">
@@ -171,7 +182,7 @@ export default function DashboardInvoices() {
                         <FormItem>
                           <FormLabel>Amount (USDC)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-invoice-amount" />
+                            <NumberInput step={0.01} placeholder="0.00" {...field} data-testid="input-invoice-amount" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -263,7 +274,7 @@ export default function DashboardInvoices() {
                           <TableRow key={invoice.id} data-testid={`invoice-row-${invoice.id}`}>
                             <TableCell className="font-mono text-sm">{invoice.invoiceNumber}</TableCell>
                             <TableCell>
-                              <div>{invoice.customerName || "-"}</div>
+                              {invoice.customerName && <div>{invoice.customerName}</div>}
                               <div className="text-sm text-muted-foreground">{invoice.customerEmail}</div>
                             </TableCell>
                             <TableCell className="font-medium">

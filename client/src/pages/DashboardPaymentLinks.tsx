@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { StatusIndicator } from "@/components/StatusIndicator";
 import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -127,8 +129,8 @@ export default function DashboardPaymentLinks() {
   };
 
   const style = {
-    "--sidebar-width": "260px",
-    "--sidebar-width-icon": "3rem",
+    "--sidebar-width": "var(--sidebar-width-expanded, 260px)",
+    "--sidebar-width-icon": "var(--sidebar-width-collapsed, 72px)",
   };
 
   return (
@@ -136,7 +138,10 @@ export default function DashboardPaymentLinks() {
       <div className="flex h-screen w-full">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+          <header 
+            className="flex items-center justify-between gap-4 px-6 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0"
+            style={{ height: 'var(--app-header-height)' }}
+          >
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-6 w-6" />
               <div>
@@ -148,6 +153,7 @@ export default function DashboardPaymentLinks() {
             </div>
             <div className="flex items-center gap-3">
               <GasPriceDisplay />
+              <StatusIndicator />
               <TestModeToggle />
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
@@ -172,9 +178,8 @@ export default function DashboardPaymentLinks() {
                           <FormItem>
                             <FormLabel>Amount (USDC)</FormLabel>
                             <FormControl>
-                              <Input
-                                type="number"
-                                step="0.01"
+                              <NumberInput
+                                step={0.01}
                                 min="0"
                                 placeholder="0.00"
                                 {...field}
@@ -226,9 +231,8 @@ export default function DashboardPaymentLinks() {
                             <FormLabel>Expiry (optional)</FormLabel>
                             <FormControl>
                               <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  step="1"
+                                <NumberInput
+                                  step={1}
                                   min="1"
                                   placeholder="30"
                                   {...field}

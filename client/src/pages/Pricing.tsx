@@ -81,7 +81,7 @@ export default function Pricing() {
             </Badge>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-4">
               Start accepting
-              <span className="block bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
+              <span className="block text-primary">
                 stablecoin payments
               </span>
             </h1>
@@ -101,8 +101,8 @@ export default function Pricing() {
                 <Card
                   className={`h-full relative ${
                     plan.popular
-                      ? "border-primary bg-card shadow-xl shadow-primary/10"
-                      : "bg-card/50"
+                      ? "border-primary bg-card"
+                      : "bg-card"
                   }`}
                   data-testid={`plan-${plan.name.toLowerCase()}`}
                 >

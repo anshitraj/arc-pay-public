@@ -26,7 +26,7 @@ export function TestModeToggle() {
       />
       <Label htmlFor="test-mode" className={`cursor-pointer ${disabled ? "cursor-not-allowed opacity-50" : ""}`}>
         <Badge variant="outline" className={`text-[10px] h-5 px-1.5 font-medium border-border/30 rounded-md ${testMode ? "text-muted-foreground bg-muted/20" : "text-foreground bg-primary/10"}`}>
-          {testMode ? "Test" : "Live"}
+          {testMode ? "Demo" : "Live"}
         </Badge>
       </Label>
     </div>

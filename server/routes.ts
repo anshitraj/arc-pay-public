@@ -18,6 +18,9 @@ import { registerBridgeRoutes } from "./routes/bridge.js";
 import { startPaymentChecker } from "./services/paymentService.js";
 import { startTxWatcher } from "./services/txWatcher.js";
 import { rateLimit } from "./middleware/rateLimit.js";
+import { FEATURE_FLAGS } from "./config.js";
+import { upload } from "./middleware/upload.js";
+import { put } from "@vercel/blob";
 
 declare module "express-session" {
   interface SessionData {
@@ -228,16 +231,6 @@ export async function registerRoutes(
 
   app.post("/api/auth/wallet-login", async (req, res) => {
     try {
-      // #region agent log
-      console.log('[DEBUG] wallet-login entry:', JSON.stringify({
-        hasSession: !!req.session,
-        sessionId: req.sessionID,
-        cookies: req.headers.cookie,
-        origin: req.headers.origin,
-        referer: req.headers.referer,
-        hypothesisId: 'A,B,C'
-      }));
-      // #endregion
       const { address } = req.body;
       
       if (!address || typeof address !== 'string' || !address.startsWith('0x')) {
@@ -303,49 +296,11 @@ export async function registerRoutes(
 
         // Ensure session is saved before sending response (critical for serverless)
         await new Promise<void>((resolve, reject) => {
-          req.session.save(async (err) => {
-            // #region agent log
-            const setCookieHeader = res.getHeader('Set-Cookie');
-            let sessionInDb = false;
-            try {
-              const result = await pool.query('SELECT sid, sess FROM session WHERE sid = $1', [req.sessionID]);
-              sessionInDb = result.rows.length > 0;
-            } catch (dbErr) {
-              console.error('[DEBUG] Error checking session in DB:', dbErr);
-            }
-            console.log('[DEBUG] wallet-login session save callback (new user):', JSON.stringify({
-              err: err?.message,
-              sessionId: req.sessionID,
-              userId: user.id,
-              merchantId: merchant.id,
-              setCookieHeader: setCookieHeader,
-              sessionInDb: sessionInDb,
-              origin: req.headers.origin,
-              referer: req.headers.referer,
-              hypothesisId: 'A,B,C'
-            }));
-            // #endregion
+          req.session.save((err) => {
             if (err) reject(err);
             else resolve();
           });
         });
-
-        // #region agent log
-        // Hook into response to capture Set-Cookie after it's set
-        const originalEnd = res.end;
-        res.end = function(chunk?: any, encoding?: any, cb?: any) {
-          const setCookieHeader = res.getHeader('Set-Cookie');
-          console.log('[DEBUG] wallet-login res.end (new user):', JSON.stringify({
-            sessionId: req.sessionID,
-            userId: user.id,
-            merchantId: merchant.id,
-            setCookieHeader: setCookieHeader,
-            allHeaders: res.getHeaders(),
-            hypothesisId: 'A'
-          }));
-          return originalEnd.call(this, chunk, encoding, cb);
-        };
-        // #endregion
 
         res.json({
           user: { id: user.id, email: user.email, name: user.name },
@@ -424,49 +379,11 @@ export async function registerRoutes(
 
         // Ensure session is saved before sending response (critical for serverless)
         await new Promise<void>((resolve, reject) => {
-          req.session.save(async (err) => {
-            // #region agent log
-            const setCookieHeader = res.getHeader('Set-Cookie');
-            let sessionInDb = false;
-            try {
-              const result = await pool.query('SELECT sid, sess FROM session WHERE sid = $1', [req.sessionID]);
-              sessionInDb = result.rows.length > 0;
-            } catch (dbErr) {
-              console.error('[DEBUG] Error checking session in DB:', dbErr);
-            }
-            console.log('[DEBUG] wallet-login session save callback (existing user):', JSON.stringify({
-              err: err?.message,
-              sessionId: req.sessionID,
-              userId: user.id,
-              merchantId: merchant.id,
-              setCookieHeader: setCookieHeader,
-              sessionInDb: sessionInDb,
-              origin: req.headers.origin,
-              referer: req.headers.referer,
-              hypothesisId: 'A,B,C'
-            }));
-            // #endregion
+          req.session.save((err) => {
             if (err) reject(err);
             else resolve();
           });
         });
-
-        // #region agent log
-        // Hook into response to capture Set-Cookie after it's set
-        const originalEnd = res.end;
-        res.end = function(chunk?: any, encoding?: any, cb?: any) {
-          const setCookieHeader = res.getHeader('Set-Cookie');
-          console.log('[DEBUG] wallet-login res.end (existing user):', JSON.stringify({
-            sessionId: req.sessionID,
-            userId: user.id,
-            merchantId: merchant.id,
-            setCookieHeader: setCookieHeader,
-            allHeaders: res.getHeaders(),
-            hypothesisId: 'A'
-          }));
-          return originalEnd.call(this, chunk, encoding, cb);
-        };
-        // #endregion
 
         res.json({
           user: { id: user.id, email: user.email, name: user.name },
@@ -514,42 +431,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/auth/me", async (req, res) => {
-    // #region agent log
-    const cookies = req.headers.cookie;
-    let sessionInDb = false;
-    let sessionData = null;
-    try {
-      const result = await pool.query('SELECT sid, sess FROM session WHERE sid = $1', [req.sessionID]);
-      sessionInDb = result.rows.length > 0;
-      if (sessionInDb) {
-        sessionData = result.rows[0].sess;
-      }
-    } catch (dbErr) {
-      console.error('[DEBUG] Error checking session in DB:', dbErr);
-    }
-    console.log('[DEBUG] /api/auth/me entry:', JSON.stringify({
-      hasSession: !!req.session,
-      sessionId: req.sessionID,
-      userId: req.session?.userId,
-      merchantId: req.session?.merchantId,
-      cookies: cookies,
-      origin: req.headers.origin,
-      referer: req.headers.referer,
-      sessionInDb: sessionInDb,
-      sessionData: sessionData,
-      hypothesisId: 'A,B,D'
-    }));
-    // #endregion
     if (!req.session.userId) {
-      // #region agent log
-      console.log('[DEBUG] /api/auth/me no userId:', JSON.stringify({
-        sessionId: req.sessionID,
-        hasSession: !!req.session,
-        cookies: cookies,
-        sessionInDb: sessionInDb,
-        hypothesisId: 'A,B,D'
-      }));
-      // #endregion
       return res.status(401).json({ error: "Not authenticated" });
     }
 
@@ -561,15 +443,6 @@ export async function registerRoutes(
     const merchant = req.session.merchantId
       ? await storage.getMerchant(req.session.merchantId)
       : null;
-
-    // #region agent log
-    console.log('[DEBUG] /api/auth/me success:', JSON.stringify({
-      userId: user.id,
-      merchantId: merchant?.id,
-      sessionId: req.sessionID,
-      hypothesisId: 'A,B,D'
-    }));
-    // #endregion
 
     res.json({
       user: { id: user.id, email: user.email, name: user.name },
@@ -619,6 +492,69 @@ export async function registerRoutes(
 
     const profile = await storage.getMerchantProfile(merchant.walletAddress);
     res.json(profile || null);
+  });
+
+  // Upload merchant profile picture
+  app.post("/api/merchant/profile/upload", requireAuth, upload.single("logo"), async (req, res) => {
+    try {
+      if (!req.session.merchantId) {
+        return res.status(400).json({ error: "No merchant associated with account" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const merchant = await storage.getMerchant(req.session.merchantId);
+      if (!merchant || !merchant.walletAddress) {
+        return res.status(404).json({ error: "Merchant wallet address not found" });
+      }
+
+      // Check for Vercel Blob token
+      const blobStoreToken = process.env.BLOB_READ_WRITE_TOKEN;
+      if (!blobStoreToken) {
+        console.error("BLOB_READ_WRITE_TOKEN not configured");
+        return res.status(500).json({ error: "Blob storage not configured. Please set BLOB_READ_WRITE_TOKEN environment variable." });
+      }
+
+      // Generate unique filename
+      const timestamp = Date.now();
+      const random = Math.round(Math.random() * 1E9);
+      const extension = req.file.originalname.split('.').pop() || 'png';
+      const filename = `merchant-${timestamp}-${random}.${extension}`;
+
+      // Upload to Vercel Blob
+      const blob = await put(filename, req.file.buffer, {
+        access: 'public',
+        token: blobStoreToken,
+        contentType: req.file.mimetype,
+        // Add image optimization - Vercel Blob automatically optimizes images
+        addRandomSuffix: false,
+      });
+
+      // Update profile with new logo URL
+      const existingProfile = await storage.getMerchantProfile(merchant.walletAddress);
+      const profile = await storage.upsertMerchantProfile({
+        walletAddress: merchant.walletAddress,
+        businessName: existingProfile?.businessName || merchant.name,
+        logoUrl: blob.url,
+        defaultGasSponsorship: existingProfile?.defaultGasSponsorship ?? false,
+      });
+
+      res.json({
+        logoUrl: blob.url,
+        profile,
+      });
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      if (error.message && error.message.includes("Invalid file type")) {
+        return res.status(400).json({ error: error.message });
+      }
+      if (error.message && error.message.includes("BLOB_READ_WRITE_TOKEN")) {
+        return res.status(500).json({ error: "Blob storage configuration error. Please contact support." });
+      }
+      res.status(500).json({ error: error.message || "Failed to upload image" });
+    }
   });
 
   const merchantProfileSchema = z.object({
@@ -816,8 +752,23 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Merchant wallet address not found" });
       }
 
-      const profile = await storage.getMerchantProfile(merchant.walletAddress);
-      const walletAddresses = await storage.getBusinessWalletAddresses(merchant.walletAddress);
+      let profile, walletAddresses;
+      try {
+        profile = await storage.getMerchantProfile(merchant.walletAddress);
+        walletAddresses = await storage.getBusinessWalletAddresses(merchant.walletAddress);
+      } catch (dbError: any) {
+        console.error("Get activation status error:", dbError);
+        // Return default values if database is unavailable
+        return res.json({
+          activated: false,
+          activatedAt: null,
+          country: null,
+          businessType: null,
+          walletAddressesCount: 0,
+          hasRequiredFields: false,
+          hasWalletAddresses: false,
+        });
+      }
 
       const isActivated = !!(
         profile?.activatedAt &&
@@ -1010,12 +961,28 @@ export async function registerRoutes(
   });
 
   app.get("/api/payments", requireAuth, async (req, res) => {
+    try {
     if (!req.session.merchantId) {
       return res.json([]);
     }
 
-    const payments = await storage.getPayments(req.session.merchantId);
+      // Add pagination support (limit to 100 by default for faster loading)
+      const limit = parseInt(req.query.limit as string) || 100;
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      const payments = await storage.getPayments(req.session.merchantId, limit, offset);
     res.json(payments);
+    } catch (error: any) {
+      console.error("Get payments error:", error);
+      // Handle timeout errors gracefully
+      if (error.message?.includes("timeout") || error.code === "ETIMEDOUT") {
+        return res.status(504).json({ 
+          error: "Request timeout",
+          message: "The request took too long. Try reducing the limit parameter or contact support."
+        });
+      }
+      res.status(500).json({ error: "Failed to get payments" });
+    }
   });
 
   // Legacy endpoint for session-based auth (dashboard)
@@ -1031,8 +998,33 @@ export async function registerRoutes(
       return res.status(403).json({ error: "Access denied" });
     }
     
+    // Get merchant profile if merchantWallet is available
+    let merchantProfile = null;
+    if (payment.merchantWallet) {
+      try {
+        // Normalize wallet address to lowercase for lookup
+        const normalizedWallet = payment.merchantWallet.toLowerCase();
+        merchantProfile = await storage.getMerchantProfile(normalizedWallet);
+        if (merchantProfile) {
+          console.log(`Found merchant profile for ${normalizedWallet}:`, merchantProfile.businessName);
+        } else {
+          console.log(`No merchant profile found for ${normalizedWallet}`);
+        }
+      } catch (error) {
+        console.error("Error fetching merchant profile:", error);
+      }
+    }
+    
     // Public access allowed (for checkout pages)
-    res.json(payment);
+    const response = {
+      ...payment,
+      merchantProfile: merchantProfile ? {
+        businessName: merchantProfile.businessName,
+        logoUrl: merchantProfile.logoUrl,
+      } : null,
+    };
+    
+    res.json(response);
   });
 
   app.post("/api/payments", requireAuth, async (req, res) => {
@@ -1071,13 +1063,18 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Merchant wallet address not set. Please configure your wallet address in settings." });
       }
 
-      // Check merchant verification (must own Verified Merchant Badge)
+      // Check merchant verification status (on-chain badge check)
       const { isMerchantVerified } = await import("./services/badgeService.js");
       const isVerified = await isMerchantVerified(req.session.merchantId);
-      if (!isVerified) {
+      
+      // Get updated merchant status (may have been updated by isMerchantVerified)
+      const updatedMerchant = await storage.getMerchant(req.session.merchantId);
+      const merchantStatus = updatedMerchant?.status || merchant.status || "demo";
+      
+      // Demo merchants can only create test payments (unless verified)
+      if (!isVerified && merchantStatus === "demo" && isTest === false) {
         return res.status(403).json({ 
-          error: "Verification Required",
-          message: "You must own a Verified Merchant Badge to create payments. Please claim your badge first."
+          error: "Demo merchants can only create test payments. Complete business verification to create live payments."
         });
       }
 
@@ -1601,12 +1598,44 @@ export async function registerRoutes(
   registerQRCodeRoutes(app);
   registerApiKeyRoutes(app);
   registerBridgeRoutes(app);
+  
+  // Register new Phase 2 routes
+  const { registerFxQuoteRoutes } = await import("./routes/fxQuotes.js");
+  const { registerSettlementRoutes } = await import("./routes/settlement.js");
+  registerFxQuoteRoutes(app);
+  registerSettlementRoutes(app);
+  
+  // Register Phase 3 routes
+  const { registerSubscriptionRoutes } = await import("./routes/subscriptions.js");
+  const { registerPayoutRoutes } = await import("./routes/payouts.js");
+  const { registerFeeRoutes } = await import("./routes/fees.js");
+  registerSubscriptionRoutes(app);
+  registerPayoutRoutes(app);
+  registerFeeRoutes(app);
 
   // Start background payment checker (legacy)
   startPaymentChecker();
   
   // Start transaction watcher (enhanced polling with exponential backoff)
   startTxWatcher();
+  
+  // Start subscription scheduler (Phase 3)
+  if (FEATURE_FLAGS.subscriptionsEnabled) {
+    const { processSubscriptionSchedules } = await import("./services/subscriptionService.js");
+    setInterval(() => {
+      processSubscriptionSchedules().catch(console.error);
+    }, 60 * 60 * 1000); // Run every hour
+    console.log("Subscription scheduler started (runs every hour)");
+  }
+  
+  // Start subscription scheduler (Phase 3)
+  if (FEATURE_FLAGS.subscriptionsEnabled) {
+    const { processSubscriptionSchedules } = await import("./services/subscriptionService.js");
+    setInterval(() => {
+      processSubscriptionSchedules().catch(console.error);
+    }, 60 * 60 * 1000); // Run every hour
+    console.log("Subscription scheduler started (runs every hour)");
+  }
 
   // Get current gas price (Gwei) from ArcScan API
   app.get("/api/gas-price", rateLimit, async (req, res) => {
@@ -1661,16 +1690,58 @@ export async function registerRoutes(
 
       // Fallback to RPC
       const rpcUrl = process.env.ARC_RPC_URL || "https://rpc.testnet.arc.network";
-      const response = await fetch(rpcUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          method: "eth_gasPrice",
-          params: [],
-          id: 1,
-        }),
-      });
+      let response;
+      try {
+        response = await fetch(rpcUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            method: "eth_gasPrice",
+            params: [],
+            id: 1,
+          }),
+        });
+      } catch (error: any) {
+        // Handle SSL certificate errors
+        if (error.code === "SELF_SIGNED_CERT_IN_CHAIN" || error.message?.includes("certificate")) {
+          const https = await import("https");
+          const url = new URL(rpcUrl);
+          const data = await new Promise<any>((resolve, reject) => {
+            const options = {
+              hostname: url.hostname,
+              port: url.port || 443,
+              path: url.pathname,
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              rejectUnauthorized: false, // Only for development/testnet
+            };
+            const req = https.request(options, (res) => {
+              let body = "";
+              res.on("data", (chunk) => { body += chunk; });
+              res.on("end", () => {
+                try {
+                  resolve(JSON.parse(body));
+                } catch (e) {
+                  reject(e);
+                }
+              });
+            });
+            req.on("error", reject);
+            req.write(JSON.stringify({
+              jsonrpc: "2.0",
+              method: "eth_gasPrice",
+              params: [],
+              id: 1,
+            }));
+            req.end();
+          });
+          const gasPriceWei = BigInt(data.result);
+          const gasPriceGwei = Number(gasPriceWei) / 1e9;
+          return res.json({ gasPrice: gasPriceGwei.toFixed(2), unit: "Gwei" });
+        }
+        throw error;
+      }
       
       const data = await response.json();
       if (data.result) {

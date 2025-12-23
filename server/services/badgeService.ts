@@ -94,16 +94,32 @@ export async function isMerchantVerified(merchantId: string): Promise<boolean> {
   }
 
   // Check on-chain ownership
-  const hasBadge = await checkBadgeOwnership(merchant.walletAddress, MERCHANT_BADGE_ADDRESS);
+  let hasBadge = false;
+  try {
+    hasBadge = await checkBadgeOwnership(merchant.walletAddress, MERCHANT_BADGE_ADDRESS);
+  } catch (error) {
+    console.error(`[Verification] Error checking badge ownership for merchant ${merchantId}:`, error);
+    // Fallback to DB check if on-chain check fails
+    const badge = await storage.getMerchantBadge(merchantId);
+    hasBadge = !!badge;
+    console.log(`[Verification] Merchant ${merchantId}: Fallback to DB check - badge exists: ${hasBadge}`);
+  }
+  
   console.log(`[Verification] Merchant ${merchantId}: On-chain badge check: ${hasBadge}, businessName: ${profile.businessName}`);
   
-  // If on-chain check passes but DB doesn't have record, update DB
+  // If verified, update merchant status to "verified"
   if (hasBadge) {
     const badge = await storage.getMerchantBadge(merchantId);
     if (!badge) {
       // Badge exists on-chain but not in DB - this shouldn't happen normally
       // but we'll still return true since on-chain is authoritative
       console.warn(`Merchant ${merchantId} has badge on-chain but not in DB`);
+    }
+    
+    // Update merchant status to verified if it's still demo
+    if (merchant.status === "demo" || merchant.status === "pending_verification") {
+      await storage.updateMerchant(merchantId, { status: "verified" });
+      console.log(`[Verification] Updated merchant ${merchantId} status to verified`);
     }
   }
 

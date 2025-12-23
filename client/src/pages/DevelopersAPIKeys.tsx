@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { StatusIndicator } from "@/components/StatusIndicator";
 import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Copy, Check, Eye, EyeOff, RefreshCw, Loader2, AlertTriangle, Key, Trash2, Pencil, X } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Copy, Check, Eye, EyeOff, RefreshCw, Loader2, AlertTriangle, Key, Trash2, Pencil, X, ChevronDown } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTestMode } from "@/hooks/useTestMode";
@@ -56,6 +62,7 @@ export default function DevelopersAPIKeys() {
   });
   const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>("");
+  const [isCodeGuideOpen, setIsCodeGuideOpen] = useState(false); // Start collapsed
 
   const { data: apiKeys = [], isLoading, refetch } = useQuery<ApiKey[]>({
     queryKey: ["/api/developers/api-keys"],
@@ -325,8 +332,8 @@ export default function DevelopersAPIKeys() {
   };
 
   const style = {
-    "--sidebar-width": "260px",
-    "--sidebar-width-icon": "3rem",
+    "--sidebar-width": "var(--sidebar-width-expanded, 260px)",
+    "--sidebar-width-icon": "var(--sidebar-width-collapsed, 72px)",
   };
 
   return (
@@ -334,7 +341,10 @@ export default function DevelopersAPIKeys() {
       <div className="flex h-screen w-full">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+          <header 
+            className="flex items-center justify-between gap-4 px-6 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0"
+            style={{ height: 'var(--app-header-height)' }}
+          >
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-6 w-6" />
               <div>
@@ -346,6 +356,7 @@ export default function DevelopersAPIKeys() {
             </div>
             <div className="flex items-center gap-3">
               <GasPriceDisplay />
+              <StatusIndicator />
               <TestModeToggle />
             </div>
           </header>
@@ -646,34 +657,40 @@ export default function DevelopersAPIKeys() {
                       </div>
                     </div>
 
-                    <div>
-                      <h3 className="font-semibold mb-2">1. Install ArcPayKit SDK</h3>
-                      <div className="bg-muted p-4 rounded-lg font-mono text-sm">
-                        <code>npm install arcpaykit</code>
-                      </div>
-                    </div>
+                    <Collapsible open={isCodeGuideOpen} onOpenChange={setIsCodeGuideOpen} className="mt-4">
+                      <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium text-primary hover:text-primary/80 transition-colors py-2 px-2 -ml-2 rounded-md hover:bg-muted/50">
+                        <span>Learn more about adding the code</span>
+                        <ChevronDown className={`h-4 w-4 ml-auto transition-transform duration-200 ${isCodeGuideOpen ? 'rotate-180' : ''}`} />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-4 mt-4 pl-0">
+                        <div>
+                          <h3 className="font-semibold mb-2">1. Install ArcPayKit SDK</h3>
+                          <div className="bg-muted p-4 rounded-lg font-mono text-sm">
+                            <code>npm install arcpaykit</code>
+                          </div>
+                        </div>
 
-                    <div>
-                      <h3 className="font-semibold mb-2">2. Set Up Your API Key</h3>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        <strong>For Server-Side (Recommended):</strong> Use your <strong>Secret Key</strong> in your <code className="bg-muted px-1.5 py-0.5 rounded">.env</code> file:
-                      </p>
-                      <div className="bg-muted p-4 rounded-lg font-mono text-sm mb-3">
-                        <code>ARCPAY_SECRET_KEY=sk_arc_live_...</code>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        <strong>For Client-Side:</strong> Use your <strong>Publishable Key</strong> (only for read operations):
-                      </p>
-                      <div className="bg-muted p-4 rounded-lg font-mono text-sm">
-                        <code>ARCPAY_PUBLISHABLE_KEY=pk_arc_live_...</code>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        ⚠️ <strong>Important:</strong> Never commit your secret key to version control. Always use environment variables. Secret keys should only be used on the server.
-                      </p>
-                    </div>
+                        <div>
+                          <h3 className="font-semibold mb-2">2. Set Up Your API Key</h3>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            <strong>For Server-Side (Recommended):</strong> Use your <strong>Secret Key</strong> in your <code className="bg-muted px-1.5 py-0.5 rounded">.env</code> file:
+                          </p>
+                          <div className="bg-muted p-4 rounded-lg font-mono text-sm mb-3">
+                            <code>ARCPAY_SECRET_KEY=sk_arc_live_...</code>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            <strong>For Client-Side:</strong> Use your <strong>Publishable Key</strong> (only for read operations):
+                          </p>
+                          <div className="bg-muted p-4 rounded-lg font-mono text-sm">
+                            <code>ARCPAY_PUBLISHABLE_KEY=pk_arc_live_...</code>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            ⚠️ <strong>Important:</strong> Never commit your secret key to version control. Always use environment variables. Secret keys should only be used on the server.
+                          </p>
+                        </div>
 
-                    <div>
-                      <h3 className="font-semibold mb-2">3. Initialize the SDK</h3>
+                        <div>
+                          <h3 className="font-semibold mb-2">3. Initialize the SDK</h3>
                       <p className="text-sm text-muted-foreground mb-3">
                         <strong>Server-Side (Node.js, Python, etc.):</strong> Use your Secret Key
                       </p>
@@ -800,6 +817,8 @@ fetch('https://pay.arcpaykit.com/api/payments/create', {
                         <li>If a secret key is exposed, regenerate it immediately</li>
                       </ul>
                     </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 </CardContent>
               </Card>

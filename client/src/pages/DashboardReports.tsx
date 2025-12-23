@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { StatusIndicator } from "@/components/StatusIndicator";
 import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,6 +72,8 @@ export default function DashboardReports() {
   const { testMode } = useTestMode();
   const { data: payments = [], isLoading } = useQuery<Payment[]>({
     queryKey: ["/api/payments"],
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Filter by test mode
@@ -121,8 +124,8 @@ export default function DashboardReports() {
   };
 
   const style = {
-    "--sidebar-width": "260px",
-    "--sidebar-width-icon": "3rem",
+    "--sidebar-width": "var(--sidebar-width-expanded, 260px)",
+    "--sidebar-width-icon": "var(--sidebar-width-collapsed, 72px)",
   };
 
   return (
@@ -130,12 +133,16 @@ export default function DashboardReports() {
       <div className="flex h-screen w-full">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+          <header 
+            className="flex items-center justify-between gap-4 px-6 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0"
+            style={{ height: 'var(--app-header-height)' }}
+          >
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-6 w-6" />
             </div>
             <div className="flex items-center gap-2">
               <GasPriceDisplay />
+              <StatusIndicator />
               <TestModeToggle />
             </div>
           </header>
@@ -159,7 +166,6 @@ export default function DashboardReports() {
                       <SelectItem value="last-7-days">Last 7 days</SelectItem>
                       <SelectItem value="last-30-days">Last 30 days</SelectItem>
                       <SelectItem value="last-90-days">Last 90 days</SelectItem>
-                      <SelectItem value="custom">Custom range</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-9">

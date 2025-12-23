@@ -29,10 +29,15 @@ const pool = new Pool({
   // Connection pool configuration
   max: 20, // Maximum number of clients in the pool
   idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection could not be established
+  connectionTimeoutMillis: 30000, // Return an error after 30 seconds if connection could not be established (increased from 10s)
   // Keep connections alive
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000,
+});
+
+// Set statement timeout on connection (30 seconds for query execution)
+pool.on("connect", async (client) => {
+  await client.query("SET statement_timeout = 30000"); // 30 seconds
 });
 
 // Handle pool errors gracefully

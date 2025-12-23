@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -8,154 +9,277 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { TestModeProvider } from "@/hooks/useTestMode";
+import { Loader2 } from "lucide-react";
 import '@rainbow-me/rainbowkit/styles.css';
-import Landing from "@/pages/Landing";
-import Dashboard from "@/pages/Dashboard";
-import DashboardPayments from "@/pages/DashboardPayments";
-import DashboardInvoices from "@/pages/DashboardInvoices";
-import DashboardTreasury from "@/pages/DashboardTreasury";
-import DashboardPaymentDetails from "@/pages/DashboardPaymentDetails";
-import DashboardSettings from "@/pages/DashboardSettings";
-import DashboardPaymentLinks from "@/pages/DashboardPaymentLinks";
-import DashboardQRCodes from "@/pages/DashboardQRCodes";
-import DashboardCustomers from "@/pages/DashboardCustomers";
-import DashboardReports from "@/pages/DashboardReports";
-import DashboardBridge from "@/pages/DashboardBridge";
-import DevelopersAPIKeys from "@/pages/DevelopersAPIKeys";
-import DashboardWebhooks from "@/pages/DashboardWebhooks";
-import Checkout from "@/pages/Checkout";
-import QRPayment from "@/pages/QRPayment";
-import Pricing from "@/pages/Pricing";
-import Docs from "@/pages/Docs";
-import Login from "@/pages/Login";
-import PublicMerchant from "@/pages/PublicMerchant";
-import NotFound from "@/pages/not-found";
-import AdminLogin from "@/pages/AdminLogin";
-import AdminDashboard from "@/pages/AdminDashboard";
-import ActivateBusiness from "@/pages/ActivateBusiness";
+
+// Lazy load pages for code splitting and faster initial load
+const Landing = lazy(() => import("@/pages/Landing"));
+const Login = lazy(() => import("@/pages/Login"));
+const Pricing = lazy(() => import("@/pages/Pricing"));
+const Docs = lazy(() => import("@/pages/Docs"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const DashboardPayments = lazy(() => import("@/pages/DashboardPayments"));
+const DashboardInvoices = lazy(() => import("@/pages/DashboardInvoices"));
+const DashboardTreasury = lazy(() => import("@/pages/DashboardTreasury"));
+const DashboardPaymentDetails = lazy(() => import("@/pages/DashboardPaymentDetails"));
+const DashboardSettings = lazy(() => import("@/pages/DashboardSettings"));
+const DashboardPaymentLinks = lazy(() => import("@/pages/DashboardPaymentLinks"));
+const DashboardQRCodes = lazy(() => import("@/pages/DashboardQRCodes"));
+const DashboardCustomers = lazy(() => import("@/pages/DashboardCustomers"));
+const DashboardReports = lazy(() => import("@/pages/DashboardReports"));
+const DashboardBridge = lazy(() => import("@/pages/DashboardBridge"));
+const DashboardSubscriptions = lazy(() => import("@/pages/DashboardSubscriptions"));
+const DashboardPayouts = lazy(() => import("@/pages/DashboardPayouts"));
+const DashboardFees = lazy(() => import("@/pages/DashboardFees"));
+const DashboardIntegrations = lazy(() => import("@/pages/DashboardIntegrations"));
+const DevelopersAPIKeys = lazy(() => import("@/pages/DevelopersAPIKeys"));
+const DashboardWebhooks = lazy(() => import("@/pages/DashboardWebhooks"));
+const Checkout = lazy(() => import("@/pages/Checkout"));
+const QRPayment = lazy(() => import("@/pages/QRPayment"));
+const PublicMerchant = lazy(() => import("@/pages/PublicMerchant"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+const AdminLogin = lazy(() => import("@/pages/AdminLogin"));
+const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
+const ActivateBusiness = lazy(() => import("@/pages/ActivateBusiness"));
+
+// Loading component
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+  </div>
+);
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Landing} />
-      <Route path="/login" component={Login} />
-      <Route path="/pricing" component={Pricing} />
-      <Route path="/docs" component={Docs} />
-      <Route path="/dashboard">
-        <ProtectedRoute>
-          <Dashboard />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/dashboard/payment-links">
-        <ProtectedRoute>
-          <DashboardPaymentLinks />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/dashboard/qr-codes">
-        <ProtectedRoute>
-          <DashboardQRCodes />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/dashboard/transactions">
-        <ProtectedRoute>
-          <DashboardPayments />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/dashboard/payments">
-        <ProtectedRoute>
-          <DashboardPayments />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/dashboard/payments/:id">
-        <ProtectedRoute>
-          <DashboardPaymentDetails />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/dashboard/invoices">
-        <ProtectedRoute>
-          <DashboardInvoices />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/dashboard/customers">
-        <ProtectedRoute>
-          <DashboardCustomers />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/dashboard/treasury">
-        <ProtectedRoute>
-          <DashboardTreasury />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/dashboard/bridge">
-        <ProtectedRoute>
-          <DashboardBridge />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/dashboard/reports">
-        <ProtectedRoute>
-          <DashboardReports />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/dashboard/settings">
-        <ProtectedRoute>
-          <DashboardSettings />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/developers/api-keys">
-        <ProtectedRoute>
-          <DevelopersAPIKeys />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/developers/webhooks">
-        <ProtectedRoute>
-          <DashboardWebhooks />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/developers/api-logs">
-        <ProtectedRoute>
-          <DashboardWebhooks />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/pay/:id">
-        <Checkout />
-      </Route>
-      <Route path="/qr/:merchantId">
-        <QRPayment />
-      </Route>
-      <Route path="/m/:wallet">
-        <PublicMerchant />
-      </Route>
-      <Route path="/admin/login">
-        <AdminLogin />
-      </Route>
-      <Route path="/admin/dashboard">
-        <AdminDashboard />
-      </Route>
-      <Route path="/admin/merchants">
-        <AdminDashboard />
-      </Route>
-      <Route path="/admin/payments">
-        <AdminDashboard />
-      </Route>
-      <Route path="/admin/change-requests">
-        <AdminDashboard />
-      </Route>
-      <Route path="/admin/config">
-        <AdminDashboard />
-      </Route>
-      <Route path="/admin/blocklist">
-        <AdminDashboard />
-      </Route>
-      <Route path="/admin/logs">
-        <AdminDashboard />
-      </Route>
-      <Route path="/activate">
-        <ProtectedRoute>
-          <ActivateBusiness />
-        </ProtectedRoute>
-      </Route>
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path="/">
+          <Suspense fallback={<PageLoader />}>
+            <Landing />
+          </Suspense>
+        </Route>
+        <Route path="/login">
+          <Suspense fallback={<PageLoader />}>
+            <Login />
+          </Suspense>
+        </Route>
+        <Route path="/pricing">
+          <Suspense fallback={<PageLoader />}>
+            <Pricing />
+          </Suspense>
+        </Route>
+        <Route path="/docs">
+          <Suspense fallback={<PageLoader />}>
+            <Docs />
+          </Suspense>
+        </Route>
+        <Route path="/dashboard">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <Dashboard />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/payment-links">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardPaymentLinks />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/qr-codes">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardQRCodes />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/transactions">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardPayments />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/payments">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardPayments />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/payments/:id">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardPaymentDetails />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/invoices">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardInvoices />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/subscriptions">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardSubscriptions />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/payouts">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardPayouts />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/fees">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardFees />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/integrations">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardIntegrations />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/customers">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardCustomers />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/treasury">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardTreasury />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/bridge">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardBridge />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/reports">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardReports />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/dashboard/settings">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardSettings />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/developers/api-keys">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DevelopersAPIKeys />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/developers/webhooks">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardWebhooks />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/developers/api-logs">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <DashboardWebhooks />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/pay/:id">
+          <Suspense fallback={<PageLoader />}>
+            <Checkout />
+          </Suspense>
+        </Route>
+        <Route path="/checkout/:id">
+          <Suspense fallback={<PageLoader />}>
+            <Checkout />
+          </Suspense>
+        </Route>
+        <Route path="/qr/:merchantId">
+          <Suspense fallback={<PageLoader />}>
+            <QRPayment />
+          </Suspense>
+        </Route>
+        <Route path="/m/:wallet">
+          <Suspense fallback={<PageLoader />}>
+            <PublicMerchant />
+          </Suspense>
+        </Route>
+        <Route path="/admin/login">
+          <Suspense fallback={<PageLoader />}>
+            <AdminLogin />
+          </Suspense>
+        </Route>
+        <Route path="/admin/dashboard">
+          <Suspense fallback={<PageLoader />}>
+            <AdminDashboard />
+          </Suspense>
+        </Route>
+        <Route path="/admin/merchants">
+          <Suspense fallback={<PageLoader />}>
+            <AdminDashboard />
+          </Suspense>
+        </Route>
+        <Route path="/admin/payments">
+          <Suspense fallback={<PageLoader />}>
+            <AdminDashboard />
+          </Suspense>
+        </Route>
+        <Route path="/admin/change-requests">
+          <Suspense fallback={<PageLoader />}>
+            <AdminDashboard />
+          </Suspense>
+        </Route>
+        <Route path="/admin/config">
+          <Suspense fallback={<PageLoader />}>
+            <AdminDashboard />
+          </Suspense>
+        </Route>
+        <Route path="/admin/blocklist">
+          <Suspense fallback={<PageLoader />}>
+            <AdminDashboard />
+          </Suspense>
+        </Route>
+        <Route path="/admin/logs">
+          <Suspense fallback={<PageLoader />}>
+            <AdminDashboard />
+          </Suspense>
+        </Route>
+        <Route path="/activate">
+          <ProtectedRoute>
+            <Suspense fallback={<PageLoader />}>
+              <ActivateBusiness />
+            </Suspense>
+          </ProtectedRoute>
+        </Route>
+        <Route>
+          <Suspense fallback={<PageLoader />}>
+            <NotFound />
+          </Suspense>
+        </Route>
+      </Switch>
+    </Suspense>
   );
 }
 
@@ -168,7 +292,24 @@ function App() {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
+        <RainbowKitProvider
+          walletList={(wallets) => {
+            // Filter out hardware wallets that require device access (USB/Bluetooth)
+            // This prevents the browser from requesting local network device access permission
+            return wallets.filter((wallet) => {
+              const walletId = wallet.id?.toLowerCase() || '';
+              const walletName = wallet.name?.toLowerCase() || '';
+              
+              // Exclude hardware wallets that use USB/Bluetooth APIs
+              const hardwareWalletIds = ['ledger', 'safe', 'trezor', 'keystone', 'ledgerHid', 'ledgerLive'];
+              const isHardwareWallet = hardwareWalletIds.some((hwId) => 
+                walletId.includes(hwId) || walletName.includes(hwId)
+              );
+              
+              return !isHardwareWallet;
+            });
+          }}
+        >
           <TestModeProvider>
             <TooltipProvider>
               <Toaster />

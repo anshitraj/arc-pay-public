@@ -2,41 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
-/* LIGHT MODE - ArcPayKit uses dark mode by default */
+/* LIGHT THEME - Enhanced beautiful design */
 :root {
-  --button-outline: rgba(0,0,0, .10);
-  --badge-outline: rgba(0,0,0, .05);
+  --button-outline: rgba(0,0,0, .06);
+  --badge-outline: rgba(0,0,0, .04);
   --opaque-button-border-intensity: -8;
-  --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
-  --border: 217 33% 17%;
-  --card: 222 47% 13%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 217 33% 17%;
-  --sidebar: 222 47% 9%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 217 33% 17%;
+  --elevate-1: rgba(0,0,0, .02);
+  --elevate-2: rgba(0,0,0, .04);
+  /* Refined neutral colors with warmer tones */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --border: 220 20% 92%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --card-border: 220 20% 92%;
+  --sidebar: 0 0% 99%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-border: 220 20% 92%;
   --sidebar-primary: 210 100% 52%;
-  --sidebar-primary-foreground: 210 40% 98%;
-  --sidebar-accent: 217 33% 17%;
-  --sidebar-accent-foreground: 210 40% 98%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 20% 96%;
+  --sidebar-accent-foreground: 222 47% 11%;
   --sidebar-ring: 210 100% 52%;
-  --popover: 222 47% 13%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 217 33% 17%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --popover-border: 220 20% 92%;
+  /* Enhanced primary blue with better saturation */
   --primary: 210 100% 52%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20% 65%;
-  --accent: 217 33% 17%;
-  --accent-foreground: 210 40% 98%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 20% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 220 20% 96%;
+  --muted-foreground: 215 16% 45%;
+  --accent: 220 20% 96%;
+  --accent-foreground: 222 47% 11%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
-  --input: 217 33% 17%;
+  --input: 220 20% 96%;
   --ring: 210 100% 52%;
   --chart-1: 210 100% 52%;
   --chart-2: 195 88% 50%;
@@ -47,14 +49,20 @@
   --font-serif: Georgia, serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
   --radius: 0.5rem;
-  --shadow-2xs: 0px 2px 0px 0px hsl(220 8% 50% / 0.00);
-  --shadow-xs: 0px 2px 0px 0px hsl(220 8% 50% / 0.00);
-  --shadow-sm: 0px 2px 0px 0px hsl(220 8% 50% / 0.00), 0px 1px 2px -1px hsl(220 8% 50% / 0.00);
-  --shadow: 0px 2px 0px 0px hsl(220 8% 50% / 0.00), 0px 1px 2px -1px hsl(220 8% 50% / 0.00);
-  --shadow-md: 0px 2px 0px 0px hsl(220 8% 50% / 0.00), 0px 2px 4px -1px hsl(220 8% 50% / 0.00);
-  --shadow-lg: 0px 2px 0px 0px hsl(220 8% 50% / 0.00), 0px 4px 6px -1px hsl(220 8% 50% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(220 8% 50% / 0.00), 0px 8px 10px -1px hsl(220 8% 50% / 0.00);
-  --shadow-2xl: 0px 2px 0px 0px hsl(220 8% 50% / 0.00);
+  /* Shared header height for consistent alignment */
+  --app-header-height: 64px;
+  /* Sidebar layout contract - single source of truth */
+  --sidebar-width-expanded: 260px;
+  --sidebar-width-collapsed: 72px;
+  /* Enhanced shadows with more depth and softness */
+  --shadow-2xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow-xs: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.06), 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.08), 0 2px 6px -2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 20px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.06);
+  --shadow-xl: 0 20px 30px -6px rgba(0, 0, 0, 0.1), 0 8px 16px -4px rgba(0, 0, 0, 0.08);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
@@ -87,54 +95,72 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
+/* DARK THEME - Arc-inspired deep blue gradient system */
 .dark {
-  --button-outline: rgba(255,255,255, .10);
+  --button-outline: rgba(255,255,255, .08);
   --badge-outline: rgba(255,255,255, .05);
   --opaque-button-border-intensity: 9;
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
-  --border: 217 33% 17%;
-  --card: 222 47% 13%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 217 33% 17%;
-  --sidebar: 222 47% 9%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 217 33% 17%;
-  --sidebar-primary: 210 100% 52%;
-  --sidebar-primary-foreground: 210 40% 98%;
-  --sidebar-accent: 217 33% 17%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 210 100% 52%;
-  --popover: 222 47% 13%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 217 33% 17%;
-  --primary: 210 100% 52%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20% 65%;
-  --accent: 217 33% 17%;
-  --accent-foreground: 210 40% 98%;
+  --elevate-1: rgba(255,255,255, .03);
+  --elevate-2: rgba(255,255,255, .06);
+  /* Arc-inspired deep blue gradient background colors */
+  /* These HSL values approximate the gradient stops */
+  --background: 210 50% 8%;
+  /* Arc text colors: Headings #F8FAFC, Body #CBD5E1, Muted #94A3B8 */
+  --foreground: 210 20% 97%;
+  --border: 210 25% 20%;
+  /* Glassy card system */
+  --card: 210 35% 10%;
+  --card-foreground: 210 20% 97%;
+  --card-border: 210 30% 18%;
+  --sidebar: 210 50% 6%;
+  /* Sidebar gradient background - matches Arc design language */
+  --sidebar-gradient-start: #0a1a2a;
+  --sidebar-gradient-mid: #081726;
+  --sidebar-gradient-end: #050b14;
+  --sidebar-foreground: 210 20% 97%;
+  --sidebar-border: 210 25% 20%;
+  /* Arc primary blue: #3B82F6 */
+  --sidebar-primary: 217 91% 60%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 210 25% 20%;
+  --sidebar-accent-foreground: 210 20% 97%;
+  --sidebar-ring: 217 91% 60%;
+  --popover: 210 35% 10%;
+  --popover-foreground: 210 20% 97%;
+  --popover-border: 210 30% 18%;
+  /* Arc primary blue: #3B82F6 */
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 25% 20%;
+  --secondary-foreground: 210 20% 97%;
+  --muted: 210 25% 20%;
+  /* Muted text: #94A3B8 */
+  --muted-foreground: 215 20% 67%;
+  --accent: 210 25% 20%;
+  --accent-foreground: 210 20% 98%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
-  --input: 217 33% 17%;
-  --ring: 210 100% 52%;
-  --chart-1: 210 100% 52%;
+  --input: 210 25% 20%;
+  --ring: 217 91% 60%;
+  --chart-1: 217 91% 60%;
   --chart-2: 195 88% 50%;
   --chart-3: 225 85% 55%;
   --chart-4: 160 84% 39%;
   --chart-5: 280 65% 60%;
-  --shadow-2xs: 0px 2px 0px 0px hsl(220 12% 8% / 0.00);
-  --shadow-xs: 0px 2px 0px 0px hsl(220 12% 8% / 0.00);
-  --shadow-sm: 0px 2px 0px 0px hsl(220 12% 8% / 0.00), 0px 1px 2px -1px hsl(220 12% 8% / 0.00);
-  --shadow: 0px 2px 0px 0px hsl(220 12% 8% / 0.00), 0px 1px 2px -1px hsl(220 12% 8% / 0.00);
-  --shadow-md: 0px 2px 0px 0px hsl(220 12% 8% / 0.00), 0px 2px 4px -1px hsl(220 12% 8% / 0.00);
-  --shadow-lg: 0px 2px 0px 0px hsl(220 12% 8% / 0.00), 0px 4px 6px -1px hsl(220 12% 8% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(220 12% 8% / 0.00), 0px 8px 10px -1px hsl(220 12% 8% / 0.00);
-  --shadow-2xl: 0px 2px 0px 0px hsl(220 12% 8% / 0.00);
+  /* Shared header height for consistent alignment */
+  --app-header-height: 64px;
+  /* Sidebar layout contract - single source of truth */
+  --sidebar-width-expanded: 260px;
+  --sidebar-width-collapsed: 72px;
+  /* Soft elevation shadows */
+  --shadow-2xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.5);
+  --shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 20px -4px rgba(0, 0, 0, 0.6), 0 4px 8px -4px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 20px 30px -6px rgba(0, 0, 0, 0.7), 0 8px 12px -6px rgba(0, 0, 0, 0.5);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
 
 /* Fallback for older browsers */
   --sidebar-primary-border: hsl(var(--sidebar-primary));
@@ -171,7 +197,70 @@
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased text-foreground;
+  }
+
+  /* Arc-inspired gradient background system */
+  .dark body {
+    background: 
+      /* Arc SVG backgrounds - positioned decorative elements (opacity < 10%) */
+      url("data:image/svg+xml,%3Csvg width='1200' height='1200' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M 0 0 Q 600 300 1200 0' stroke='rgba(59,130,246,0.08)' fill='none' stroke-width='3'/%3E%3C/svg%3E") top right / 1200px 1200px no-repeat,
+      url("data:image/svg+xml,%3Csvg width='1000' height='1000' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M 0 1000 Q 500 600 1000 1000' stroke='rgba(59,130,246,0.06)' fill='none' stroke-width='3'/%3E%3C/svg%3E") bottom left / 1000px 1000px no-repeat,
+      /* Subtle grid texture (opacity ≤ 3%) */
+      linear-gradient(rgba(59,130,246,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59,130,246,0.025) 1px, transparent 1px),
+      /* Main gradient background */
+      radial-gradient(ellipse at top right, #0f2a44 0%, transparent 50%),
+      linear-gradient(180deg, #0f2a44 0%, #081726 50%, #050b14 100%);
+    background-size: 
+      1200px 1200px,
+      1000px 1000px,
+      48px 48px,
+      48px 48px,
+      100% 100%,
+      100% 100%;
+    background-attachment: fixed;
+  }
+
+  /* Glassy card system */
+  .dark .shadcn-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Code block styling - system-level framing */
+  .dark pre {
+    background: rgba(15, 42, 68, 0.5);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .dark code {
+    background: transparent;
+  }
+
+  /* Code blocks inside cards */
+  .dark .shadcn-card pre {
+    background: rgba(15, 42, 68, 0.6);
+    border-color: rgba(59, 130, 246, 0.25);
+  }
+
+  /* Button hover states - Arc hover blue: #60A5FA */
+  .dark button.bg-primary:hover:not(:disabled),
+  .dark a.bg-primary:hover {
+    background-color: hsl(217, 96%, 68%) !important;
+    border-color: hsl(217, 96%, 68%) !important;
+  }
+
+  /* Smooth transitions for all interactive elements */
+  .dark button:not(:disabled),
+  .dark a {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   }
 }
 
@@ -284,5 +373,90 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
+  }
+
+  /* Status indicator blinking animation */
+  @keyframes status-blink {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
+
+  .status-indicator-blink {
+    animation: status-blink 1.5s ease-in-out infinite;
+  }
+
+  /* Beautiful number input spinner arrows */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  /* Custom spinner buttons for number inputs */
+  .number-input-wrapper {
+    position: relative;
+  }
+
+  .number-input-wrapper input[type="number"] {
+    padding-right: 2.5rem;
+  }
+
+  .number-input-spinner {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    pointer-events: none;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+  }
+
+  .number-input-wrapper:hover .number-input-spinner,
+  .number-input-wrapper:focus-within .number-input-spinner {
+    opacity: 1;
+  }
+
+  .number-input-spinner button {
+    width: 1.125rem;
+    height: 0.875rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    pointer-events: auto;
+    padding: 0;
+    color: hsl(var(--muted-foreground));
+    transition: color 0.2s ease, background-color 0.2s ease;
+    border-radius: 0.125rem;
+  }
+
+  .number-input-spinner button:hover {
+    background-color: hsl(var(--muted));
+    color: hsl(var(--foreground));
+  }
+
+  .number-input-spinner button:active {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+  }
+
+  .number-input-spinner button svg {
+    width: 0.625rem;
+    height: 0.625rem;
+    stroke-width: 2.5;
   }
 }

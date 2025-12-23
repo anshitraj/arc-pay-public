@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Copy, Check, AlertCircle, Zap, Trash2, Plus, Star, Info } from "lucide-react";
+import { Loader2, Copy, Check, AlertCircle, Zap, Trash2, Plus, Star, Info, Upload, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import type { Merchant } from "@shared/schema";
@@ -48,7 +48,6 @@ interface WalletAddress {
 
 const merchantProfileSchema = z.object({
   businessName: z.string().min(2, "Business name must be at least 2 characters").max(50, "Business name must be at most 50 characters"),
-  logoUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
 });
 
 type MerchantProfileFormData = z.infer<typeof merchantProfileSchema>;
@@ -95,17 +94,20 @@ export default function DashboardSettings() {
     resolver: zodResolver(merchantProfileSchema),
     defaultValues: {
       businessName: "",
-      logoUrl: "",
     },
   });
+
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update form when profile loads
   useEffect(() => {
     if (profile) {
       form.reset({
         businessName: profile.businessName,
-        logoUrl: profile.logoUrl || "",
       });
+      setLogoPreview(profile.logoUrl || null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
@@ -132,6 +134,76 @@ export default function DashboardSettings() {
     },
   });
 
+  const uploadLogoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("logo", file);
+      const response = await fetch("/api/merchant/profile/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        let errorMessage = "Failed to upload image";
+        try {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } catch (e) {
+          // If response is not JSON, try to get text
+          const text = await response.text();
+          errorMessage = text || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        return await response.json();
+      } else {
+        throw new Error("Invalid response format from server");
+      }
+    },
+    onSuccess: (data) => {
+      setLogoPreview(data.logoUrl);
+      queryClient.invalidateQueries({ queryKey: ["/api/merchant/profile"] });
+      toast({
+        title: "Logo uploaded",
+        description: "Your profile picture has been updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to upload image",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const removeLogoMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/merchant/profile", {
+        logoUrl: "",
+      });
+    },
+    onSuccess: () => {
+      setLogoPreview(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/merchant/profile"] });
+      toast({
+        title: "Logo removed",
+        description: "Your profile picture has been removed.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove logo",
+        variant: "destructive",
+      });
+    },
+  });
+
   const saveProfileMutation = useMutation({
     mutationFn: async (data: MerchantProfileFormData) => {
       // Only allow saving if businessName is not already set (first time setup)
@@ -140,7 +212,6 @@ export default function DashboardSettings() {
       }
       return await apiRequest("POST", "/api/merchant/profile", {
         businessName: data.businessName,
-        logoUrl: data.logoUrl || undefined,
       });
     },
     onSuccess: () => {
@@ -282,11 +353,17 @@ export default function DashboardSettings() {
   }
 
   return (
-    <SidebarProvider style={{ "--sidebar-width": "260px", "--sidebar-width-icon": "3rem" } as React.CSSProperties}>
+    <SidebarProvider style={{ 
+      "--sidebar-width": "var(--sidebar-width-expanded, 260px)", 
+      "--sidebar-width-icon": "var(--sidebar-width-collapsed, 72px)" 
+    } as React.CSSProperties}>
       <div className="flex h-screen w-full">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+          <header 
+            className="flex items-center justify-between gap-4 px-6 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0"
+            style={{ height: 'var(--app-header-height)' }}
+          >
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-6 w-6" />
               <div>
@@ -444,22 +521,97 @@ export default function DashboardSettings() {
                           </FormItem>
                         )}
                       />
-                      <FormField
-                        control={form.control}
-                        name="logoUrl"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Logo URL (Optional)</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="https://example.com/logo.png" />
-                            </FormControl>
-                            <FormDescription>
-                              Enter a URL to your logo image (PNG or SVG recommended)
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <div className="space-y-2">
+                        <Label>Profile Picture</Label>
+                        <div className="flex items-center gap-4">
+                          <div className="relative">
+                            <div
+                              className="w-24 h-24 rounded-full bg-muted border-2 border-border flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-80 transition-opacity group"
+                              onClick={() => fileInputRef.current?.click()}
+                            >
+                              {logoPreview ? (
+                                <img
+                                  src={logoPreview}
+                                  alt="Profile"
+                                  className="w-full h-full object-cover"
+                                  onError={() => setLogoPreview(null)}
+                                />
+                              ) : (
+                                <img
+                                  src="/user.svg"
+                                  alt="Profile placeholder"
+                                  className="w-full h-full object-cover opacity-60"
+                                />
+                              )}
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                <Upload className="w-6 h-6 text-white" />
+                              </div>
+                            </div>
+                            {logoPreview && (
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                className="absolute -top-2 -right-2 w-6 h-6 rounded-full"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeLogoMutation.mutate();
+                                }}
+                                disabled={removeLogoMutation.isPending}
+                              >
+                                {removeLogoMutation.isPending ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <X className="w-3 h-3" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setIsUploading(true);
+                                  uploadLogoMutation.mutate(file, {
+                                    onSettled: () => {
+                                      setIsUploading(false);
+                                      if (fileInputRef.current) {
+                                        fileInputRef.current.value = "";
+                                      }
+                                    },
+                                  });
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={isUploading || uploadLogoMutation.isPending}
+                            >
+                              {isUploading || uploadLogoMutation.isPending ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Uploading...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-4 h-4 mr-2" />
+                                  {logoPreview ? "Change Picture" : "Upload Picture"}
+                                </>
+                              )}
+                            </Button>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Click to upload a profile picture. PNG, JPG, SVG, or WebP (max 5MB)
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                       <Button
                         type="submit"
                         disabled={saveProfileMutation.isPending}

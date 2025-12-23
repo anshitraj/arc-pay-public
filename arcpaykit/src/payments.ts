@@ -10,10 +10,21 @@ export interface CreatePaymentRequest {
   estimatedFees?: string;
   description?: string;
   customerEmail?: string;
-  merchantWallet: string;
+  merchantWallet?: string; // Optional - will use merchant's default wallet if not provided
   expiresInMinutes?: number;
   isTest?: boolean;
   gasSponsored?: boolean;
+}
+
+/**
+ * Simple payment creation request (happy path)
+ * Only requires essential fields - all others are inferred
+ */
+export interface SimpleCreatePaymentRequest {
+  amount: string;
+  currency?: string; // Optional, defaults to USDC
+  description?: string;
+  customerEmail?: string;
 }
 
 export interface CreatePaymentResponse {
@@ -90,9 +101,45 @@ export class Payments {
   constructor(private client: ArcPayClient) {}
 
   /**
-   * Create a new payment
+   * Create a new payment (happy path - recommended for most users)
+   * 
+   * This method only requires essential fields. All advanced fields are inferred:
+   * - merchantWallet: Uses merchant's default wallet from profile
+   * - isTest: Inferred from API key prefix (sk_arc_test_ / sk_arc_live_)
+   * - paymentAsset: Defaults to ARC USDC
+   * - settlementCurrency: Defaults to USDC
+   * - paymentChainId: Inferred automatically
+   * 
+   * @example
+   * ```typescript
+   * const payment = await arcpay.payments.create({
+   *   amount: "100.00",
+   *   currency: "USDC",
+   *   description: "Payment for order #123",
+   *   customerEmail: "customer@example.com"
+   * });
+   * ```
    */
-  create(data: CreatePaymentRequest): Promise<CreatePaymentResponse> {
+  create(data: SimpleCreatePaymentRequest): Promise<CreatePaymentResponse> {
+    return this.client.request<CreatePaymentResponse>("/api/payments/create", {
+      method: "POST",
+      body: JSON.stringify({
+        amount: data.amount,
+        currency: data.currency || "USDC",
+        description: data.description,
+        customerEmail: data.customerEmail,
+        // All other fields are inferred server-side
+      })
+    });
+  }
+
+  /**
+   * Create a new payment with full control (advanced users only)
+   * 
+   * Most users should use payments.create() instead.
+   * This method allows full control over all payment parameters.
+   */
+  createAdvanced(data: CreatePaymentRequest): Promise<CreatePaymentResponse> {
     return this.client.request<CreatePaymentResponse>("/api/payments/create", {
       method: "POST",
       body: JSON.stringify(data)

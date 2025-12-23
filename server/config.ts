@@ -118,3 +118,12 @@ export const USDC_DECIMALS = 6; // USDC uses 6 decimals on ARC
 export const API_RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 export const API_RATE_LIMIT_MAX_REQUESTS = 100; // per window
 
+// Phase 3 Feature Flags
+export const FEATURE_FLAGS = {
+  subscriptionsEnabled: process.env.SUBSCRIPTIONS_ENABLED !== "false", // Default: enabled
+  payoutsEnabled: process.env.PAYOUTS_ENABLED !== "false", // Default: enabled
+  supabaseIntegrationEnabled: process.env.SUPABASE_INTEGRATION_ENABLED !== "false", // Default: enabled
+  neonIntegrationEnabled: process.env.NEON_INTEGRATION_ENABLED !== "false", // Default: enabled
+  feesAndSplitsEnabled: process.env.FEES_AND_SPLITS_ENABLED !== "false", // Default: enabled
+};
+

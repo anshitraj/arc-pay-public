@@ -6,7 +6,6 @@ import { motion } from "framer-motion";
 export function Hero() {
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-24 sm:pt-28 lg:pt-32">
-      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
       <div className="absolute inset-0 overflow-hidden">
         <svg
           className="absolute top-0 left-0 w-full h-full opacity-[0.03]"
@@ -24,13 +23,6 @@ export function Hero() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1.5 }}
-          className="absolute top-1/4 -right-1/4 w-[800px] h-[800px] rounded-full bg-primary/5 blur-3xl"
-        />
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1.5, delay: 0.3 }}
-          className="absolute -bottom-1/4 -left-1/4 w-[600px] h-[600px] rounded-full bg-primary/3 blur-3xl"
         />
       </div>
       <svg
@@ -75,7 +67,7 @@ export function Hero() {
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight leading-[1.1] mb-4">
               <span className="block">Intent-based</span>
-              <span className="block bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
+              <span className="block text-primary">
                 stablecoin payments on Arc
               </span>
             </h1>
@@ -120,7 +112,7 @@ export function Hero() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="relative"
           >
-            <div className="relative bg-card border border-border rounded-2xl p-6 shadow-xl shadow-primary/5">
+            <div className="relative bg-card border border-border rounded-lg p-6">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-3 h-3 rounded-full bg-red-500" />
                 <div className="w-3 h-3 rounded-full bg-yellow-500" />
@@ -152,8 +144,6 @@ export function Hero() {
                 </code>
               </pre>
             </div>
-            <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-primary/20 rounded-full blur-2xl" />
-            <div className="absolute -top-4 -left-4 w-32 h-32 bg-primary/10 rounded-full blur-2xl" />
           </motion.div>
         </div>
       </div>

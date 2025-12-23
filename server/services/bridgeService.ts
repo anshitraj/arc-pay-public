@@ -2,10 +2,19 @@
  * Bridge Service
  * Handles cross-chain bridging using Circle CCTP (Cross-Chain Transfer Protocol)
  * Supports USDC and EURC canonical burn-and-mint bridging
+ * 
+ * CCTP Flow:
+ * 1. Burn USDC on source chain via TokenMessenger.depositForBurn()
+ * 2. Wait for Circle Attestation Service to attest to the burn
+ * 3. Mint USDC on destination chain via MessageTransmitter.receiveMessage()
+ * 
+ * Fast Transfer: Uses Circle's Fast Transfer Allowance for faster-than-finality transfers (~30s)
+ * Standard Transfer: Waits for hard finality (~15-30 minutes)
  */
 
 import { createPublicClient, http, parseUnits, formatUnits } from 'viem';
 import { base, baseSepolia, mainnet, sepolia } from 'viem/chains';
+import { estimateCCTPBridge, supportsCCTP as cctpSupports } from './cctpService.js';
 
 // Circle CCTP contract addresses (testnet)
 const CCTP_TESTNET_CONFIG = {
@@ -76,23 +85,43 @@ function getCCTPConfig(chainId: number, isTestnet: boolean) {
  */
 export async function estimateBridge(request: BridgeRequest): Promise<BridgeEstimate> {
   const isTestnet = request.isTestnet ?? true;
-  const config = getCCTPConfig(request.fromChainId, isTestnet);
+  const arcChainId = isTestnet ? ARC_TESTNET_CHAIN_ID : ARC_MAINNET_CHAIN_ID;
+  const fromIsArc = request.fromChainId === arcChainId;
+  const toIsArc = request.toChainId === arcChainId;
+
+  // Determine which chain has CCTP support (for burn/mint operations)
+  const cctpChainId = fromIsArc ? request.toChainId : request.fromChainId;
+  const config = getCCTPConfig(cctpChainId, isTestnet);
 
   if (!config) {
-    throw new Error(`CCTP not supported on chain ${request.fromChainId}`);
+    throw new Error(`CCTP not supported for this bridge route`);
   }
 
-  // CCTP typically takes 15-30 seconds for testnet, 30-60 seconds for mainnet
-  const estimatedTime = isTestnet ? 20 : 45;
+  // Use CCTP service to estimate bridge time and fees
+  // Fast Transfer enables ~30s transfers (testnet) vs ~15min standard
+  const { estimatedTime, estimatedFees: cctpFees } = estimateCCTPBridge(
+    request.fromChainId,
+    request.toChainId,
+    request.currency,
+    isTestnet,
+    true // Use Fast Transfer by default
+  );
+  
+  const estimatedFees = cctpFees;
 
-  // CCTP fees are typically minimal (gas fees only)
-  // For testnet, we simulate minimal fees
-  const estimatedFees = isTestnet ? '0.01' : '0.05';
+  // Determine bridge direction for steps description
+  const fromChainName = fromIsArc ? 'Arc Network' : `chain ${request.fromChainId}`;
+  const toChainName = toIsArc ? 'Arc Network' : `chain ${request.toChainId}`;
 
+  // Determine if using Fast Transfer or Standard Transfer
+  const useFastTransfer = estimatedTime < 120; // Less than 2 minutes = Fast Transfer
+  
   const steps = [
-    `Burn ${request.amount} ${request.currency} on source chain`,
-    'Wait for Circle attestation',
-    `Mint ${request.amount} ${request.currency} on Arc Network`,
+    `Burn ${request.amount} ${request.currency} on ${fromChainName}`,
+    useFastTransfer 
+      ? 'Wait for Circle attestation (Fast Transfer - ~30s)'
+      : 'Wait for Circle attestation (Standard Transfer - ~15min)',
+    `Mint ${request.amount} ${request.currency} on ${toChainName}`,
   ];
 
   return {
@@ -106,11 +135,37 @@ export async function estimateBridge(request: BridgeRequest): Promise<BridgeEsti
  * Check if a chain supports CCTP bridging
  */
 export function supportsCCTP(chainId: number, currency: 'USDC' | 'EURC', isTestnet: boolean): boolean {
-  const config = getCCTPConfig(chainId, isTestnet);
-  if (!config) return false;
+  return cctpSupports(chainId, currency, isTestnet);
+}
 
-  if (currency === 'USDC') return !!config.usdc;
-  if (currency === 'EURC') return !!config.eurc;
+/**
+ * Check if a bridge route is valid for CCTP
+ * CCTP bridges work:
+ * - FROM CCTP-supported chains (Base, Ethereum, etc.) TO Arc Network
+ * - FROM Arc Network TO CCTP-supported chains (Base, Ethereum, etc.)
+ */
+export function isValidCCTPRoute(
+  fromChainId: number,
+  toChainId: number,
+  currency: 'USDC' | 'EURC',
+  isTestnet: boolean
+): boolean {
+  const arcChainId = isTestnet ? ARC_TESTNET_CHAIN_ID : ARC_MAINNET_CHAIN_ID;
+  const fromIsArc = fromChainId === arcChainId;
+  const toIsArc = toChainId === arcChainId;
+
+  // If both chains are Arc, invalid route
+  if (fromIsArc && toIsArc) return false;
+
+  // If FROM Arc TO CCTP-supported chain, valid (Arc can bridge TO CCTP chains)
+  if (fromIsArc && supportsCCTP(toChainId, currency, isTestnet)) return true;
+
+  // If FROM CCTP-supported chain TO Arc, valid (CCTP chains can bridge TO Arc)
+  if (toIsArc && supportsCCTP(fromChainId, currency, isTestnet)) return true;
+
+  // If both chains support CCTP, valid (for cross-CCTP bridges)
+  if (supportsCCTP(fromChainId, currency, isTestnet) && supportsCCTP(toChainId, currency, isTestnet)) return true;
+
   return false;
 }
 

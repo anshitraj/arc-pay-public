@@ -47,31 +47,9 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
-});
+// Enhanced API logging middleware (replaces basic logging)
+import { apiLogging } from "./middleware/apiLogging.js";
+app.use(apiLogging);
 
 (async () => {
   // Initialize admin user from ADMIN_WALLET env var
@@ -85,11 +63,17 @@ app.use((req, res, next) => {
   registerAdminRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    // Don't send response if headers already sent
+    if (res.headersSent) {
+      console.error("Error after headers sent:", err);
+      return;
+    }
+
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    console.error(`Error ${status}:`, message);
+    res.status(status).json({ error: message });
   });
 
   // importantly only setup vite in development and after

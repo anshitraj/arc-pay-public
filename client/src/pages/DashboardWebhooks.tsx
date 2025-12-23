@@ -17,8 +17,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Plus, Trash2, ExternalLink, Webhook, Key } from "lucide-react";
+import { Loader2, Plus, Trash2, ExternalLink, Webhook, Key, ChevronDown } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { WebhookSubscription, WebhookEvent } from "@shared/schema";
@@ -37,6 +42,7 @@ export default function DashboardWebhooks() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
+  const [isCodeGuideOpen, setIsCodeGuideOpen] = useState(false);
 
   const { data: subscriptions = [], isLoading, refetch } = useQuery<WebhookSubscription[]>({
     queryKey: ["/api/webhooks/subscriptions"],
@@ -127,7 +133,10 @@ export default function DashboardWebhooks() {
       <div className="flex h-screen w-full">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b border-border bg-background/80 backdrop-blur-sm">
+          <header 
+            className="flex items-center justify-between gap-4 px-6 border-b border-border bg-background/80 backdrop-blur-sm flex-shrink-0"
+            style={{ height: 'var(--app-header-height)' }}
+          >
             <div className="flex items-center gap-4">
               <SidebarTrigger />
               <div>
@@ -271,8 +280,14 @@ export default function DashboardWebhooks() {
                       </p>
                     </div>
 
-                    <div>
-                      <h3 className="font-semibold mb-2">2. Set Up Your Webhook Endpoint</h3>
+                    <Collapsible open={isCodeGuideOpen} onOpenChange={setIsCodeGuideOpen} className="mt-6">
+                      <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium text-primary hover:text-primary/80 transition-colors py-2 hover-elevate rounded-md px-2 -ml-2">
+                        <span>Learn more about adding the code</span>
+                        <ChevronDown className={`h-4 w-4 ml-auto transition-transform duration-200 ${isCodeGuideOpen ? 'rotate-180' : ''}`} />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-4 mt-4">
+                        <div>
+                          <h3 className="font-semibold mb-2">2. Set Up Your Webhook Endpoint</h3>
                       <p className="text-sm text-muted-foreground mb-3">
                         Create an endpoint in your application to receive webhook events:
                       </p>
@@ -400,6 +415,8 @@ Content-Type: application/json`}</pre>
                         <li>Always use idempotency keys when processing webhook events</li>
                       </ul>
                     </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 </CardContent>
               </Card>

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { StatusIndicator } from "@/components/StatusIndicator";
 import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -143,8 +144,8 @@ export default function DashboardCustomers() {
   };
 
   const style = {
-    "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
+    "--sidebar-width": "var(--sidebar-width-expanded, 260px)",
+    "--sidebar-width-icon": "var(--sidebar-width-collapsed, 72px)",
   };
 
   return (
@@ -152,7 +153,10 @@ export default function DashboardCustomers() {
       <div className="flex h-screen w-full">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b border-border bg-background/80 backdrop-blur-sm">
+          <header 
+            className="flex items-center justify-between gap-4 px-6 border-b border-border bg-background/80 backdrop-blur-sm flex-shrink-0"
+            style={{ height: 'var(--app-header-height)' }}
+          >
             <div className="flex items-center gap-4">
               <SidebarTrigger />
               <div>
@@ -164,6 +168,7 @@ export default function DashboardCustomers() {
             </div>
             <div className="flex items-center gap-3">
               <GasPriceDisplay />
+              <StatusIndicator />
               <TestModeToggle />
               {testMode && (
                 <Dialog open={open} onOpenChange={setOpen}>

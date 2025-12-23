@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { StatusIndicator } from "@/components/StatusIndicator";
 import { GasPriceDisplay } from "@/components/GasPriceDisplay";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -31,6 +32,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -250,8 +252,8 @@ export default function DashboardQRCodes() {
   };
 
   const style = {
-    "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
+    "--sidebar-width": "var(--sidebar-width-expanded, 260px)",
+    "--sidebar-width-icon": "var(--sidebar-width-collapsed, 72px)",
   };
 
   return (
@@ -259,7 +261,10 @@ export default function DashboardQRCodes() {
       <div className="flex h-screen w-full">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b border-border bg-background/80 backdrop-blur-sm">
+          <header 
+            className="flex items-center justify-between gap-4 px-6 border-b border-border bg-background/80 backdrop-blur-sm flex-shrink-0"
+            style={{ height: 'var(--app-header-height)' }}
+          >
             <div className="flex items-center gap-4">
               <SidebarTrigger />
               <div>
@@ -271,6 +276,7 @@ export default function DashboardQRCodes() {
             </div>
             <div className="flex items-center gap-3">
               <GasPriceDisplay />
+              <StatusIndicator />
               <TestModeToggle />
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
@@ -341,9 +347,8 @@ export default function DashboardQRCodes() {
                             <FormItem>
                               <FormLabel>Amount (USDC)</FormLabel>
                               <FormControl>
-                                <Input
-                                  type="number"
-                                  step="0.01"
+                                <NumberInput
+                                  step={0.01}
                                   min="0"
                                   placeholder="0.00"
                                   {...field}
@@ -378,9 +383,8 @@ export default function DashboardQRCodes() {
                           <FormItem>
                             <FormLabel>Expires in (minutes, optional)</FormLabel>
                             <FormControl>
-                              <Input
-                                type="number"
-                                step="1"
+                              <NumberInput
+                                step={1}
                                 min="1"
                                 placeholder="e.g., 60 for 1 hour"
                                 {...field}

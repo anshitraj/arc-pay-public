@@ -91,7 +91,7 @@ export function ConversionFlow({
             )}
             {requiresBridge && (
               <>
-                <span className="text-muted-foreground">Bridge via CCTP</span>
+                <span className="text-muted-foreground">Bridge</span>
                 <ArrowRight className="w-4 h-4 text-muted-foreground" />
               </>
             )}

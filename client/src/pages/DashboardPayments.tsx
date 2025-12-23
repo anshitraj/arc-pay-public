@@ -4,7 +4,9 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { PaymentsTable } from "@/components/PaymentsTable";
 import { TestModeToggle } from "@/components/TestModeToggle";
+import { StatusIndicator } from "@/components/StatusIndicator";
 import { GasPriceDisplay } from "@/components/GasPriceDisplay";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Download } from "lucide-react";
@@ -19,6 +21,8 @@ export default function DashboardPayments() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const { data: payments = [], isLoading } = useQuery<Payment[]>({
     queryKey: ["/api/payments"],
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Filter by test mode
@@ -36,8 +40,8 @@ export default function DashboardPayments() {
   };
 
   const style = {
-    "--sidebar-width": "260px",
-    "--sidebar-width-icon": "3rem",
+    "--sidebar-width": "var(--sidebar-width-expanded, 260px)",
+    "--sidebar-width-icon": "var(--sidebar-width-collapsed, 72px)",
   };
 
   return (
@@ -45,7 +49,10 @@ export default function DashboardPayments() {
       <div className="flex h-screen w-full" data-testid="page-dashboard-payments">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 px-6 py-2.5 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0 h-12">
+          <header 
+            className="flex items-center justify-between gap-4 px-6 border-b border-border/50 bg-background/95 backdrop-blur-sm flex-shrink-0"
+            style={{ height: 'var(--app-header-height)' }}
+          >
             <div className="flex items-center gap-3">
               <SidebarTrigger data-testid="button-sidebar-toggle" className="h-6 w-6" />
               <div>
@@ -54,6 +61,8 @@ export default function DashboardPayments() {
             </div>
             <div className="flex items-center gap-2">
               <GasPriceDisplay />
+              <ThemeToggle />
+              <StatusIndicator />
               <TestModeToggle />
               <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-7 text-xs">
                 <Download className="w-3 h-3 mr-1.5" />

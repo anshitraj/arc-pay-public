@@ -7,7 +7,7 @@ Official ArcPay Python SDK for accepting stablecoin payments.
 from .client import ArcPayClient, ArcPayError
 from .payments import Payments
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 class ArcPay:

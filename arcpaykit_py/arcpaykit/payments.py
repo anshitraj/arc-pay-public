@@ -19,7 +19,55 @@ class Payments:
     def create(
         self,
         amount: str,
-        merchant_wallet: str,
+        currency: Optional[str] = None,
+        description: Optional[str] = None,
+        customer_email: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a new payment (happy path - recommended for most users).
+        
+        This method only requires essential fields. All advanced fields are inferred:
+        - merchant_wallet: Uses merchant's default wallet from profile
+        - is_test: Inferred from API key prefix (sk_arc_test_ / sk_arc_live_)
+        - payment_asset: Defaults to ARC USDC
+        - settlement_currency: Defaults to USDC
+        - payment_chain_id: Inferred automatically
+        
+        Args:
+            amount: Payment amount (as string, e.g., "100.00")
+            currency: Payment currency (optional, defaults to "USDC")
+            description: Payment description (optional)
+            customer_email: Customer email address (optional)
+            
+        Returns:
+            Payment creation response with checkout_url
+            
+        Example:
+            >>> payment = arcpay.payments.create(
+            ...     amount="100.00",
+            ...     currency="USDC",
+            ...     description="Payment for order #123",
+            ...     customer_email="customer@example.com"
+            ... )
+        """
+        data: Dict[str, Any] = {
+            "amount": amount,
+        }
+        
+        if currency is not None:
+            data["currency"] = currency
+        if description is not None:
+            data["description"] = description
+        if customer_email is not None:
+            data["customerEmail"] = customer_email
+        
+        # All other fields are inferred server-side
+        return self.client.request("/api/payments/create", method="POST", data=data)
+    
+    def create_advanced(
+        self,
+        amount: str,
+        merchant_wallet: Optional[str] = None,
         currency: Optional[str] = None,
         settlement_currency: Optional[Literal["USDC", "EURC"]] = None,
         payment_asset: Optional[str] = None,
@@ -33,11 +81,14 @@ class Payments:
         gas_sponsored: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
-        Create a new payment.
+        Create a new payment with full control (advanced users only).
+        
+        Most users should use payments.create() instead.
+        This method allows full control over all payment parameters.
         
         Args:
             amount: Payment amount (as string, e.g., "100.00")
-            merchant_wallet: Merchant wallet address
+            merchant_wallet: Merchant wallet address (optional, uses default if not provided)
             currency: Payment currency (default: "USDC")
             settlement_currency: Settlement currency ("USDC" or "EURC")
             payment_asset: Specific asset identifier
@@ -55,9 +106,10 @@ class Payments:
         """
         data: Dict[str, Any] = {
             "amount": amount,
-            "merchantWallet": merchant_wallet,
         }
         
+        if merchant_wallet is not None:
+            data["merchantWallet"] = merchant_wallet
         if currency is not None:
             data["currency"] = currency
         if settlement_currency is not None:

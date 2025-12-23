@@ -122,9 +122,12 @@ function isConnectionError(error: any): boolean {
     message.includes("econnreset") ||
     message.includes("econnrefused") ||
     message.includes("etimedout") ||
+    message.includes("enotfound") ||
+    message.includes("getaddrinfo") ||
     code === "econnreset" ||
     code === "econnrefused" ||
     code === "etimedout" ||
+    code === "enotfound" ||
     code === "57p01" || // PostgreSQL: terminating connection due to administrator command
     code === "57p02" || // PostgreSQL: terminating connection due to crash
     code === "57p03" || // PostgreSQL: terminating connection due to idle timeout

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, CheckCircle2, XCircle, Shield, AlertCircle } from "lucide-react";
@@ -426,10 +427,9 @@ export default function QRPayment() {
               {!isFixedAmount && (
                 <div className="space-y-2">
                   <Label htmlFor="amount">Amount (USDC)</Label>
-                  <Input
+                  <NumberInput
                     id="amount"
-                    type="number"
-                    step="0.01"
+                    step={0.01}
                     min="0"
                     placeholder="0.00"
                     value={amount}

@@ -200,8 +200,14 @@ export class DatabaseStorage implements IStorage {
     return merchant;
   }
 
-  async getPayments(merchantId: string): Promise<Payment[]> {
-    return await db.select().from(payments).where(eq(payments.merchantId, merchantId)).orderBy(desc(payments.createdAt));
+  async getPayments(merchantId: string, limit: number = 100, offset: number = 0): Promise<Payment[]> {
+    return await db
+      .select()
+      .from(payments)
+      .where(eq(payments.merchantId, merchantId))
+      .orderBy(desc(payments.createdAt))
+      .limit(limit)
+      .offset(offset);
   }
 
   async getPayment(id: string): Promise<Payment | undefined> {

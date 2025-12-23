@@ -10,25 +10,39 @@ pip install arcpaykit
 
 ## Quick Start
 
+Get started in 5 minutes:
+
 ```python
 from arcpaykit import ArcPay
 
 # Initialize the client
 arcpay = ArcPay("your-api-key")
 
-# Create a payment
+# Create a payment (happy path - recommended)
 payment = arcpay.payments.create(
     amount="100.00",
     currency="USDC",
-    merchant_wallet="0x...",
-    description="Payment for order #123"
+    description="Payment for order #123",
+    customer_email="customer@example.com"
 )
 
-print(payment["checkout_url"])  # Send this URL to your customer
+# Redirect customer to checkout
+print(payment["checkout_url"])  # https://pay.arcpaykit.com/checkout/pay_...
 
-# Retrieve a payment
-retrieved = arcpay.payments.retrieve(payment["id"])
+# That's it! ArcPay handles:
+# - Merchant wallet (uses your default)
+# - Test/live mode (inferred from API key)
+# - Payment chain (inferred automatically)
+# - Settlement currency (defaults to USDC)
 ```
+
+**No need to configure:**
+- ❌ Merchant wallet (uses your default)
+- ❌ Test/live mode (inferred from API key: `sk_arc_test_` vs `sk_arc_live_`)
+- ❌ Payment chain ID (inferred automatically)
+- ❌ Settlement currency (defaults to USDC)
+
+For advanced use cases, see `payments.create_advanced()` below.
 
 ## API Reference
 
@@ -49,11 +63,35 @@ ArcPay(api_key: str, base_url: str = "https://pay.arcpaykit.com")
 
 #### `create(...) -> dict`
 
-Create a new payment.
+Create a new payment (happy path - recommended for most users).
+
+**Most users should use this method.** It only requires essential fields. All advanced fields are inferred automatically.
 
 **Parameters:**
 - `amount` (str, required): Payment amount (e.g., "100.00")
-- `merchant_wallet` (str, required): Merchant wallet address
+- `currency` (str, optional): Payment currency (default: "USDC")
+- `description` (str, optional): Payment description
+- `customer_email` (str, optional): Customer email address
+
+**Example:**
+```python
+payment = arcpay.payments.create(
+    amount="100.00",
+    currency="USDC",
+    description="Order #123",
+    customer_email="customer@example.com"
+)
+```
+
+#### `create_advanced(...) -> dict`
+
+Create a new payment with full control (advanced users only).
+
+**Most users should use `payments.create()` instead.** This method allows full control over all payment parameters.
+
+**Parameters:**
+- `amount` (str, required): Payment amount (e.g., "100.00")
+- `merchant_wallet` (str, optional): Merchant wallet address (uses default if not provided)
 - `currency` (str, optional): Payment currency (default: "USDC")
 - `settlement_currency` (str, optional): Settlement currency ("USDC" or "EURC")
 - `payment_asset` (str, optional): Specific asset identifier
@@ -63,7 +101,7 @@ Create a new payment.
 - `description` (str, optional): Payment description
 - `customer_email` (str, optional): Customer email address
 - `expires_in_minutes` (int, optional): Expiration time in minutes
-- `is_test` (bool, optional): Test mode flag
+- `is_test` (bool, optional): Test mode flag (inferred from API key if not provided)
 - `gas_sponsored` (bool, optional): Gas sponsorship preference
 
 **Returns:**
@@ -119,22 +157,43 @@ import os
 # Initialize with API key from environment
 arcpay = ArcPay(os.getenv("ARCPAY_API_KEY"))
 
-# Create payment
+# Create payment (simple - recommended)
 payment = arcpay.payments.create(
     amount="50.00",
     currency="USDC",
-    merchant_wallet="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
     description="Monthly subscription",
-    customer_email="customer@example.com",
-    expires_in_minutes=30
+    customer_email="customer@example.com"
 )
 
 print(f"Payment created: {payment['id']}")
 print(f"Checkout URL: {payment['checkout_url']}")
 
+# Redirect customer (in your web framework)
+# return redirect(payment['checkout_url'])
+
 # Later, check payment status
 status = arcpay.payments.retrieve(payment["id"])
 print(f"Payment status: {status['status']}")
+```
+
+### Advanced Payment Creation
+
+For full control over payment parameters:
+
+```python
+payment = arcpay.payments.create_advanced(
+    amount="50.00",
+    merchant_wallet="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+    currency="USDC",
+    settlement_currency="EURC",
+    payment_asset="USDC_BASE",
+    payment_chain_id=8453,
+    description="Monthly subscription",
+    customer_email="customer@example.com",
+    expires_in_minutes=30,
+    is_test=False,
+    gas_sponsored=True
+)
 ```
 
 ### Using Custom Base URL

@@ -84,7 +84,10 @@ export default function DashboardPaymentDetails() {
       <div className="flex h-screen w-full">
         <DashboardSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b border-border bg-background/80 backdrop-blur-sm">
+          <header 
+            className="flex items-center justify-between gap-4 px-6 border-b border-border bg-background/80 backdrop-blur-sm flex-shrink-0"
+            style={{ height: 'var(--app-header-height)' }}
+          >
             <div className="flex items-center gap-4">
               <SidebarTrigger />
               <Button variant="ghost" size="sm" onClick={() => setLocation("/dashboard/payments")}>

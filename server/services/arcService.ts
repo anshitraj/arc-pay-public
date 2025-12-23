@@ -7,6 +7,69 @@ const ARC_CHAIN_ID = parseInt(process.env.ARC_CHAIN_ID || "5042002", 10); // ARC
 const ARC_RPC_URL = process.env.ARC_RPC_URL || "https://rpc.testnet.arc.network";
 const ARC_EXPLORER_BASE_URL = process.env.ARC_EXPLORER_URL || "https://testnet.arcscan.app";
 
+// Helper to make RPC calls with SSL error handling
+async function rpcCall(method: string, params: any[]): Promise<any> {
+  try {
+    const response = await fetch(ARC_RPC_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method,
+        params,
+        id: 1,
+      }),
+    });
+    return await response.json();
+  } catch (error: any) {
+    // Handle SSL certificate errors
+    if (error.code === "SELF_SIGNED_CERT_IN_CHAIN" || error.message?.includes("certificate")) {
+      console.warn(`SSL certificate error for ${ARC_RPC_URL}, using fallback`);
+      // For development/testnet, we can use a workaround
+      // In production, ensure proper certificates are used
+      if (process.env.NODE_ENV !== "production" || process.env.ALLOW_SELF_SIGNED_CERTS === "true") {
+        // Use https module directly with rejectUnauthorized: false
+        const https = await import("https");
+        const url = new URL(ARC_RPC_URL);
+        return new Promise((resolve, reject) => {
+          const options = {
+            hostname: url.hostname,
+            port: url.port || 443,
+            path: url.pathname,
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            rejectUnauthorized: false, // Only for development/testnet
+          };
+          
+          const req = https.request(options, (res) => {
+            let data = "";
+            res.on("data", (chunk) => { data += chunk; });
+            res.on("end", () => {
+              try {
+                resolve(JSON.parse(data));
+              } catch (e) {
+                reject(e);
+              }
+            });
+          });
+          
+          req.on("error", reject);
+          req.write(JSON.stringify({
+            jsonrpc: "2.0",
+            method,
+            params,
+            id: 1,
+          }));
+          req.end();
+        });
+      }
+    }
+    throw error;
+  }
+}
+
 export interface TransactionStatus {
   confirmed: boolean;
   failed: boolean;
@@ -32,18 +95,7 @@ export function getArcChainConfig() {
  */
 export async function verifyTransaction(txHash: string): Promise<TransactionStatus> {
   try {
-    const response = await fetch(ARC_RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method: "eth_getTransactionReceipt",
-        params: [txHash],
-        id: 1,
-      }),
-    });
-
-    const data = await response.json();
+    const data = await rpcCall("eth_getTransactionReceipt", [txHash]);
 
     if (data.error) {
       return {
@@ -86,18 +138,7 @@ export async function verifyTransaction(txHash: string): Promise<TransactionStat
  */
 export async function getTransactionDetails(txHash: string) {
   try {
-    const response = await fetch(ARC_RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method: "eth_getTransactionByHash",
-        params: [txHash],
-        id: 1,
-      }),
-    });
-
-    const data = await response.json();
+    const data = await rpcCall("eth_getTransactionByHash", [txHash]);
     return data.result || null;
   } catch (error) {
     console.error("Error getting transaction details:", error);
@@ -110,18 +151,7 @@ export async function getTransactionDetails(txHash: string) {
  */
 export async function getBlockTimestamp(blockNumber: number): Promise<Date | null> {
   try {
-    const response = await fetch(ARC_RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method: "eth_getBlockByNumber",
-        params: [`0x${blockNumber.toString(16)}`, false],
-        id: 1,
-      }),
-    });
-
-    const data = await response.json();
+    const data = await rpcCall("eth_getBlockByNumber", [`0x${blockNumber.toString(16)}`, false]);
     if (data.result && data.result.timestamp) {
       const timestamp = parseInt(data.result.timestamp, 16);
       return new Date(timestamp * 1000);
@@ -184,24 +214,13 @@ export async function checkBadgeOwnership(
     // Combine selector + encoded parameter
     const encodedData = functionSelector + paddedAddress;
 
-    const response = await fetch(ARC_RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method: "eth_call",
-        params: [
-          {
-            to: contractAddress,
-            data: encodedData,
-          },
-          "latest",
-        ],
-        id: 1,
-      }),
-    });
-
-    const data = await response.json();
+    const data = await rpcCall("eth_call", [
+      {
+        to: contractAddress,
+        data: encodedData,
+      },
+      "latest",
+    ]);
     if (data.error) {
       console.error("Error checking badge ownership:", data.error);
       return false;

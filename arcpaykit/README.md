@@ -10,24 +10,38 @@ npm install arcpaykit
 
 ## Quick Start
 
+Get started in 5 minutes:
+
 ```typescript
 import { ArcPay } from "arcpaykit";
 
 const arcpay = new ArcPay("your-api-key");
 
-// Create a payment
+// Create a payment (happy path - recommended)
 const payment = await arcpay.payments.create({
   amount: "100.00",
   currency: "USDC",
-  merchantWallet: "0x...",
-  description: "Payment for order #123"
+  description: "Payment for order #123",
+  customerEmail: "customer@example.com"
 });
 
-console.log(payment.checkout_url); // Send this URL to your customer
+// Redirect customer to checkout
+console.log(payment.checkout_url); // https://pay.arcpaykit.com/checkout/pay_...
 
-// Retrieve a payment
-const retrieved = await arcpay.payments.retrieve(payment.id);
+// That's it! ArcPay handles:
+// - Merchant wallet (uses your default)
+// - Test/live mode (inferred from API key)
+// - Payment chain (inferred automatically)
+// - Settlement currency (defaults to USDC)
 ```
+
+**No need to configure:**
+- ❌ Merchant wallet (uses your default)
+- ❌ Test/live mode (inferred from API key: `sk_arc_test_` vs `sk_arc_live_`)
+- ❌ Payment chain ID (inferred automatically)
+- ❌ Settlement currency (defaults to USDC)
+
+For advanced use cases, see `payments.createAdvanced()` below.
 
 ## API Reference
 
@@ -46,14 +60,43 @@ new ArcPay(apiKey: string, baseUrl?: string)
 
 ### Payments
 
-#### `create(data: CreatePaymentRequest): Promise<CreatePaymentResponse>`
+#### `create(data: SimpleCreatePaymentRequest): Promise<CreatePaymentResponse>`
 
-Create a new payment.
+Create a new payment (happy path - recommended for most users).
+
+**Most users should use this method.** It only requires essential fields. All advanced fields are inferred automatically.
+
+**Request:**
+```typescript
+{
+  amount: string;              // Required: Payment amount (e.g., "100.00")
+  currency?: string;          // Optional: Payment currency (default: "USDC")
+  description?: string;       // Optional: Payment description
+  customerEmail?: string;     // Optional: Customer email
+}
+```
+
+**Example:**
+```typescript
+const payment = await arcpay.payments.create({
+  amount: "100.00",
+  currency: "USDC",
+  description: "Order #123",
+  customerEmail: "customer@example.com"
+});
+```
+
+#### `createAdvanced(data: CreatePaymentRequest): Promise<CreatePaymentResponse>`
+
+Create a new payment with full control (advanced users only).
+
+**Most users should use `payments.create()` instead.** This method allows full control over all payment parameters.
 
 **Request:**
 ```typescript
 {
   amount: string;                    // Required: Payment amount
+  merchantWallet?: string;            // Optional: Merchant wallet (uses default if not provided)
   currency?: string;                 // Optional: Payment currency (default: "USDC")
   settlementCurrency?: "USDC" | "EURC"; // Optional: Settlement currency (default: "USDC")
   paymentAsset?: string;              // Optional: Specific asset identifier
@@ -62,9 +105,8 @@ Create a new payment.
   estimatedFees?: string;            // Optional: Estimated fees
   description?: string;              // Optional: Payment description
   customerEmail?: string;            // Optional: Customer email
-  merchantWallet: string;             // Required: Merchant wallet address
   expiresInMinutes?: number;         // Optional: Expiration time in minutes
-  isTest?: boolean;                  // Optional: Test mode flag
+  isTest?: boolean;                  // Optional: Test mode flag (inferred from API key if not provided)
   gasSponsored?: boolean;            // Optional: Gas sponsorship preference
 }
 ```
@@ -139,22 +181,43 @@ import { ArcPay } from "arcpaykit";
 
 const arcpay = new ArcPay(process.env.ARCPAY_API_KEY!);
 
-// Create payment
+// Create payment (simple - recommended)
 const payment = await arcpay.payments.create({
   amount: "50.00",
   currency: "USDC",
-  merchantWallet: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
   description: "Monthly subscription",
-  customerEmail: "customer@example.com",
-  expiresInMinutes: 30
+  customerEmail: "customer@example.com"
 });
 
 console.log(`Payment created: ${payment.id}`);
 console.log(`Checkout URL: ${payment.checkout_url}`);
 
+// Redirect customer
+window.location.href = payment.checkout_url;
+
 // Later, check payment status
 const status = await arcpay.payments.retrieve(payment.id);
 console.log(`Payment status: ${status.status}`);
+```
+
+### Advanced Payment Creation
+
+For full control over payment parameters:
+
+```typescript
+const payment = await arcpay.payments.createAdvanced({
+  amount: "50.00",
+  merchantWallet: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+  currency: "USDC",
+  settlementCurrency: "EURC",
+  paymentAsset: "USDC_BASE",
+  paymentChainId: 8453,
+  description: "Monthly subscription",
+  customerEmail: "customer@example.com",
+  expiresInMinutes: 30,
+  isTest: false,
+  gasSponsored: true
+});
 ```
 
 ### Using Custom Base URL

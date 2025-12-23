@@ -20,26 +20,50 @@ The smoking gun: `lockdown-install.js` appears in production stack traces. This 
 - In dev mode, SES guards may not run, so it works
 - In production, SES locks down globals **before** wallet SDK initializes
 
-## ✅ The Fix (Applied)
+## ✅ The Fix (Applied - CORRECT APPROACH)
 
-### 1. Exclude SES from Vite Bundle
+### Root Cause (Confirmed)
+SES is **NOT** coming from imports - it's being **executed at runtime** by bundled wallet SDK dependencies. The `lockdown-install.js` file proves SES is self-installing when wallet SDKs execute.
 
-Updated `vite.config.ts` to exclude SES from optimization and bundling:
+### Why Previous Fix Failed
+- ❌ Vite `exclude` didn't work - SES executes at runtime, not import time
+- ❌ Stubs didn't work - SES is already bundled and self-installing
+- ❌ Config changes didn't work - SES runs before config is evaluated
 
+### The Correct Fix: Lazy-Load Wallet SDKs
+
+**Problem**: Top-level imports in `App.tsx` cause wallet SDKs to execute immediately:
 ```typescript
-optimizeDeps: {
-  exclude: ['ses', '@endo/ses', '@endo/lockdown', '@agoric/ses'],
-  // ...
-},
-build: {
-  rollupOptions: {
-    external: ['ses', '@endo/ses', '@endo/lockdown', '@agoric/ses'],
-    // ...
-  }
-}
+// ❌ WRONG - Executes immediately, triggers SES
+import { WagmiProvider } from 'wagmi';
+import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
+import { config } from './lib/rainbowkit';
 ```
 
-### 2. Rebuild Steps
+**Solution**: Lazy-load wallet SDKs after `window.onload`:
+
+1. **Created `LazyWalletProvider`** (`client/src/lib/wallet-provider-lazy.tsx`):
+   - Waits for `window.onload` before loading wallet SDKs
+   - Uses React `lazy()` to prevent execution during app bootstrap
+   - Dynamically imports wagmi, RainbowKit, and config
+
+2. **Updated `App.tsx`**:
+   - Removed all top-level wallet SDK imports
+   - Uses `LazyWalletProvider` instead of direct providers
+   - App bootstrap completes before wallet SDKs execute
+
+### Execution Order (Fixed)
+**Before (Broken)**:
+```
+Browser loads → wallet SDK executes → SES runs → React.createContext broken → ❌ crash
+```
+
+**After (Fixed)**:
+```
+Browser loads → React mounts → window.onload → lazy import wallet SDK → SES may run (but too late) → ✅ works
+```
+
+### Rebuild Steps
 
 ```bash
 # Clean everything

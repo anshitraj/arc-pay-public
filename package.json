@@ -5,6 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "cross-env NODE_ENV=development tsx server/index.ts",
+    "server": "cross-env NODE_ENV=development ARCPAY_PUBLIC_DEMO_MODE=true tsx server/index.ts",
     "build": "npx tsx script/build.ts",
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
     "preview": "cross-env NODE_ENV=production PORT=4173 node dist/index.cjs",
@@ -13,9 +14,15 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "db:push:dev": "cross-env NODE_ENV=development drizzle-kit push",
-    "db:migrate": "tsx scripts/run-migration.ts"
+    "db:migrate": "tsx scripts/run-migration.ts",
+    "circle:generate-secret": "tsx scripts/generate-circle-entity-secret.ts",
+    "circle:create-wallet": "tsx scripts/create-circle-wallet.ts"
   },
   "dependencies": {
+    "@circle-fin/adapter-circle-wallets": "^1.0.1",
+    "@circle-fin/adapter-viem-v2": "^1.2.0",
+    "@circle-fin/bridge-kit": "^1.2.0",
+    "@circle-fin/developer-controlled-wallets": "^9.6.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.4",
@@ -47,6 +54,7 @@
     "@radix-ui/react-tooltip": "^1.2.0",
     "@rainbow-me/rainbowkit": "2.2.10",
     "@tanstack/react-query": "5.90.12",
+    "@types/compression": "^1.8.1",
     "@types/multer": "^2.0.0",
     "@vercel/blob": "^2.0.0",
     "@walletconnect/ethereum-provider": "2.21.1",
@@ -55,6 +63,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "compression": "^1.8.1",
     "connect-pg-simple": "^10.0.0",
     "date-fns": "^3.6.0",
     "drizzle-orm": "^0.39.3",
@@ -79,6 +88,7 @@
     "react-icons": "^5.4.0",
     "react-resizable-panels": "^2.1.7",
     "recharts": "^2.15.2",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.2.5",

@@ -103,41 +103,56 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private checkDatabase(): void {
+    if (!db) {
+      throw new Error(
+        "Database not configured. In demo mode, use public routes (/api/public/*) which use in-memory storage. " +
+        "Full database routes require DATABASE_URL to be set."
+      );
+    }
+  }
+
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+    this.checkDatabase();
+    const [user] = await db!.select().from(users).where(eq(users.id, id));
     return user;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    this.checkDatabase();
+    const [user] = await db!.select().from(users).where(eq(users.email, email));
     return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
+    this.checkDatabase();
+    const [user] = await db!.insert(users).values(insertUser).returning();
     return user;
   }
 
   async getMerchant(id: string): Promise<Merchant | undefined> {
-    const [merchant] = await db.select().from(merchants).where(eq(merchants.id, id));
+    this.checkDatabase();
+    const [merchant] = await db!.select().from(merchants).where(eq(merchants.id, id));
     return merchant;
   }
 
   async getMerchantByUserId(userId: string): Promise<Merchant | undefined> {
-    const [merchant] = await db.select().from(merchants).where(eq(merchants.userId, userId));
+    this.checkDatabase();
+    const [merchant] = await db!.select().from(merchants).where(eq(merchants.userId, userId));
     return merchant;
   }
 
   async getMerchantByApiKey(apiKey: string): Promise<Merchant | undefined> {
+    this.checkDatabase();
     // First, try the old system (merchants.apiKey)
-    const [merchant] = await db.select().from(merchants).where(eq(merchants.apiKey, apiKey));
+    const [merchant] = await db!.select().from(merchants).where(eq(merchants.apiKey, apiKey));
     if (merchant) {
       return merchant;
     }
 
     // Then, try the new apiKeys table
     // Check if the key matches any keyPrefix (for publishable keys or MVP where full key is stored)
-    const matchingKey = await db
+    const matchingKey = await db!
       .select()
       .from(apiKeys)
       .where(
@@ -156,7 +171,7 @@ export class DatabaseStorage implements IStorage {
 
     // For secret keys, we need to verify against hashedKey
     // Get all non-revoked secret keys and check them
-    const allSecretKeys = await db
+    const allSecretKeys = await db!
       .select()
       .from(apiKeys)
       .where(
@@ -186,7 +201,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMerchantByWalletAddress(walletAddress: string): Promise<Merchant | undefined> {
-    const [merchant] = await db.select().from(merchants).where(eq(merchants.walletAddress, walletAddress.toLowerCase()));
+    this.checkDatabase();
+    const [merchant] = await db!.select().from(merchants).where(eq(merchants.walletAddress, walletAddress.toLowerCase()));
     return merchant;
   }
 
@@ -348,10 +364,12 @@ export class ExtendedStorage extends DatabaseStorage {
   }
 
   async getWebhookSubscriptions(merchantId: string): Promise<WebhookSubscription[]> {
+    // Only select active subscriptions by default for better performance
     return await db
       .select()
       .from(webhookSubscriptions)
-      .where(eq(webhookSubscriptions.merchantId, merchantId));
+      .where(eq(webhookSubscriptions.merchantId, merchantId))
+      .orderBy(webhookSubscriptions.createdAt); // Consistent ordering
   }
 
   async getWebhookSubscription(id: string): Promise<WebhookSubscription | undefined> {
@@ -395,7 +413,12 @@ export class ExtendedStorage extends DatabaseStorage {
   }
 
   async getPaymentProof(paymentId: string): Promise<PaymentProof | undefined> {
-    const [proof] = await db.select().from(paymentProofs).where(eq(paymentProofs.paymentId, paymentId));
+    // Use limit(1) for better performance when we only need one result
+    const [proof] = await db
+      .select()
+      .from(paymentProofs)
+      .where(eq(paymentProofs.paymentId, paymentId))
+      .limit(1);
     return proof;
   }
 

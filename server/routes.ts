@@ -22,6 +22,7 @@ import { rateLimit } from "./middleware/rateLimit.js";
 import { FEATURE_FLAGS } from "./config.js";
 import { upload } from "./middleware/upload.js";
 import { put } from "@vercel/blob";
+import sharp from "sharp";
 
 declare module "express-session" {
   interface SessionData {
@@ -65,7 +66,7 @@ const loginSchema = z.object({
 const createPaymentSchema = z.object({
   amount: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Amount must be a positive number"),
   currency: z.string().optional().default("USDC"), // Payment asset (what user pays with)
-  settlementCurrency: z.enum(["USDC", "EURC"]).default("USDC"), // Settlement currency (USDC or EURC on Arc)
+  settlementCurrency: z.enum(["USDC", "EURC", "USYC"]).default("USDC"), // Settlement currency (USDC, EURC, or USYC on Arc)
   paymentAsset: z.string().optional(), // Specific asset identifier (e.g., "USDC_ARC", "USDC_BASE", "ETH_BASE")
   paymentChainId: z.coerce.number().int().optional(), // Chain ID where payment is made
   conversionPath: z.string().optional(), // JSON string describing conversion path
@@ -75,6 +76,7 @@ const createPaymentSchema = z.object({
   expiresInMinutes: z.coerce.number().int().positive().optional(),
   isTest: z.coerce.boolean().optional(), // Coerce to boolean to handle string "true"/"false"
   gasSponsored: z.coerce.boolean().optional().default(false), // Gas sponsorship preference
+  merchantFeePercentage: z.coerce.number().min(0).max(100).optional(), // Merchant fee percentage (0-100)
 });
 
 const createInvoiceSchema = z.object({
@@ -123,13 +125,26 @@ export async function registerRoutes(
   });
 
   // Configure session store - use PostgreSQL for serverless compatibility
-  const PgSession = connectPgSimple(session);
-  const sessionStore = new PgSession({
-    pool: pool, // Use the PostgreSQL pool directly
-    tableName: "session", // Table name for sessions
-    createTableIfMissing: true, // Auto-create table if it doesn't exist
-    pruneSessionInterval: false, // Disable automatic pruning in serverless
-  });
+  // In demo mode without database, use memory store
+  const isDemoMode = process.env.ARCPAY_PUBLIC_DEMO_MODE === "true";
+  let sessionStore: session.Store;
+  
+  if (pool) {
+    const PgSession = connectPgSimple(session);
+    sessionStore = new PgSession({
+      pool: pool, // Use the PostgreSQL pool directly
+      tableName: "session", // Table name for sessions
+      createTableIfMissing: true, // Auto-create table if it doesn't exist
+      pruneSessionInterval: false, // Disable automatic pruning in serverless
+    });
+  } else {
+    // Use memory store in demo mode without database
+    const MemoryStore = require("memorystore")(session);
+    sessionStore = new MemoryStore({
+      checkPeriod: 86400000, // Prune expired entries every 24h
+    });
+    console.log("⚠️  Using in-memory session store (demo mode without database)");
+  }
 
   // Determine if we should use secure cookies
   // In preview mode (localhost), we're on HTTP, so secure cookies won't work
@@ -611,6 +626,92 @@ export async function registerRoutes(
     }
   });
 
+  // Upload product image (for payment links) - converts PNG to WebP
+  app.post("/api/payments/product-image", requireAuth, upload.single("image"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Check for Vercel Blob token
+      const blobStoreToken = process.env.BLOB_READ_WRITE_TOKEN;
+      if (!blobStoreToken) {
+        console.error("BLOB_READ_WRITE_TOKEN not configured");
+        return res.status(500).json({ error: "Blob storage not configured. Please set BLOB_READ_WRITE_TOKEN environment variable." });
+      }
+
+      // Convert image to WebP if it's PNG, otherwise keep original format
+      let imageBuffer = req.file.buffer;
+      let contentType = req.file.mimetype;
+      let extension = 'webp';
+
+      if (req.file.mimetype === 'image/png') {
+        // Convert PNG to WebP
+        imageBuffer = await sharp(req.file.buffer)
+          .webp({ quality: 85 })
+          .toBuffer();
+        contentType = 'image/webp';
+        extension = 'webp';
+      } else if (req.file.mimetype === 'image/jpeg' || req.file.mimetype === 'image/jpg') {
+        // Convert JPEG to WebP as well for consistency
+        imageBuffer = await sharp(req.file.buffer)
+          .webp({ quality: 85 })
+          .toBuffer();
+        contentType = 'image/webp';
+        extension = 'webp';
+      } else if (req.file.mimetype === 'image/webp') {
+        // Already WebP, optimize it
+        imageBuffer = await sharp(req.file.buffer)
+          .webp({ quality: 85 })
+          .toBuffer();
+        extension = 'webp';
+      } else {
+        // For other formats (GIF, SVG), keep original but use appropriate extension
+        const originalExt = req.file.originalname.split('.').pop() || 'png';
+        extension = originalExt === 'svg' ? 'svg' : 'webp';
+        if (extension !== 'svg') {
+          // Try to convert to WebP
+          try {
+            imageBuffer = await sharp(req.file.buffer)
+              .webp({ quality: 85 })
+              .toBuffer();
+            contentType = 'image/webp';
+            extension = 'webp';
+          } catch {
+            // If conversion fails, use original
+            imageBuffer = req.file.buffer;
+          }
+        }
+      }
+
+      // Generate unique filename
+      const timestamp = Date.now();
+      const random = Math.round(Math.random() * 1E9);
+      const filename = `product-${timestamp}-${random}.${extension}`;
+
+      // Upload to Vercel Blob
+      const blob = await put(filename, imageBuffer, {
+        access: 'public',
+        token: blobStoreToken,
+        contentType: contentType,
+        addRandomSuffix: false,
+      });
+
+      res.json({
+        url: blob.url,
+      });
+    } catch (error: any) {
+      console.error("Product image upload error:", error);
+      if (error.message && error.message.includes("Invalid file type")) {
+        return res.status(400).json({ error: error.message });
+      }
+      if (error.message && error.message.includes("BLOB_READ_WRITE_TOKEN")) {
+        return res.status(500).json({ error: "Blob storage configuration error. Please contact support." });
+      }
+      res.status(500).json({ error: error.message || "Failed to upload image" });
+    }
+  });
+
   const merchantProfileSchema = z.object({
     businessName: z.string().min(2, "Business name must be at least 2 characters").max(50, "Business name must be at most 50 characters").optional(),
     logoUrl: z.string().url().optional().or(z.literal("").transform(() => undefined)),
@@ -1051,15 +1152,15 @@ export async function registerRoutes(
         return res.status(400).json({ error: "settlementCurrency is required" });
       }
 
-      if (settlementCurrency !== "USDC" && settlementCurrency !== "EURC") {
-        return res.status(400).json({ error: "Settlement currency must be USDC or EURC" });
+      if (settlementCurrency !== "USDC" && settlementCurrency !== "EURC" && settlementCurrency !== "USYC") {
+        return res.status(400).json({ error: "Settlement currency must be USDC, EURC, or USYC" });
       }
 
       const { getSupportedPaymentAssets } = await import("./services/bridgeService.js");
       const isTest = isTestnet === "true" || isTestnet === true;
 
       const supportedAssets = getSupportedPaymentAssets(
-        settlementCurrency as "USDC" | "EURC",
+        settlementCurrency as "USDC" | "EURC" | "USYC",
         isTest
       );
 
@@ -1079,8 +1180,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Missing required parameters" });
       }
 
-      if (settlementCurrency !== "USDC" && settlementCurrency !== "EURC") {
-        return res.status(400).json({ error: "Settlement currency must be USDC or EURC" });
+      if (settlementCurrency !== "USDC" && settlementCurrency !== "EURC" && settlementCurrency !== "USYC") {
+        return res.status(400).json({ error: "Settlement currency must be USDC, EURC, or USYC" });
       }
 
       const { estimateConversion, getSupportedPaymentAssets } = await import("./services/bridgeService.js");
@@ -1088,14 +1189,14 @@ export async function registerRoutes(
 
       const estimate = estimateConversion(
         paymentAsset as string,
-        settlementCurrency as "USDC" | "EURC",
+        settlementCurrency as "USDC" | "EURC" | "USYC",
         amount as string,
         isTest
       );
 
       // Get supported assets to determine steps
       const supportedAssets = getSupportedPaymentAssets(
-        settlementCurrency as "USDC" | "EURC",
+        settlementCurrency as "USDC" | "EURC" | "USYC",
         isTest
       );
       const selectedAsset = supportedAssets.find(a => a.asset === paymentAsset);
@@ -1155,6 +1256,7 @@ export async function registerRoutes(
       merchantProfile: merchantProfile ? {
         businessName: merchantProfile.businessName,
         logoUrl: merchantProfile.logoUrl,
+        defaultGasSponsorship: merchantProfile.defaultGasSponsorship,
       } : null,
     };
     
@@ -1184,7 +1286,8 @@ export async function registerRoutes(
         customerEmail, 
         expiresInMinutes, 
         isTest,
-        gasSponsored
+        gasSponsored,
+        merchantFeePercentage
       } = result.data;
 
       // Get merchant to retrieve wallet address
@@ -1230,6 +1333,7 @@ export async function registerRoutes(
         expiresInMinutes,
         isTest: isTest !== undefined ? isTest : true, // Default to test mode only if not provided
         gasSponsored: gasSponsored || false,
+        merchantFeePercentage,
       });
 
       res.json(payment);

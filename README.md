@@ -1,8 +1,19 @@
-# ARC Payment Gateway
+# ARC Payment Gateway (Public Repository)
 
 > **Stripe-style stablecoin payments, built natively on ARC**
 
+> ⚠️ **This is the PUBLIC repository** (`arc-pay-public`). This repository contains:
+> - ✅ Smart contracts (audit-ready)
+> - ✅ Public backend core (demo/audit mode only)
+> - ✅ Frontend integration
+> 
+> ❌ **NOT included**: Real settlement logic, CCTP bridging, payout processing, production secrets
+> 
+> See [ARCHITECTURE.md](./ARCHITECTURE.md) and [SECURITY.md](./SECURITY.md) for details.
+
 A production-grade payment gateway platform similar to Stripe or Circle Payments, built natively on the ARC blockchain. The application provides enterprise-quality payment processing with features including payment creation, invoicing, webhook management, refunds, and treasury operations.
+
+**This public repository runs in demo mode only.** Set `ARCPAY_PUBLIC_DEMO_MODE=true` to run.
 
 ## 🌟 Features
 
@@ -132,11 +143,32 @@ A production-grade payment gateway platform similar to Stripe or Circle Payments
    ```
 
 5. **Run the application**
+   
+   **Public Repository (Demo Mode)**:
    ```bash
+   # Set demo mode (required)
+   export ARCPAY_PUBLIC_DEMO_MODE=true  # Linux/macOS
+   # or
+   set ARCPAY_PUBLIC_DEMO_MODE=true     # Windows CMD
+   # or
+   $env:ARCPAY_PUBLIC_DEMO_MODE="true"  # Windows PowerShell
+   
+   # Optional: Set API base URL for frontend
+   export VITE_API_BASE_URL=http://localhost:3001
+   
+   # Run frontend
    npm run dev
+   
+   # Run demo server (in separate terminal)
+   npm run server
    ```
-
-   The app will be available at `http://localhost:3000`
+   
+   The app will be available at `http://localhost:5000` (or PORT from .env)
+   
+   **Note**: 
+   - The public repository requires `ARCPAY_PUBLIC_DEMO_MODE=true`. The server will refuse to start without it.
+   - Database (`DATABASE_URL`) is optional in demo mode - public routes use in-memory storage
+   - Only `/api/public/*` endpoints work without a database
 
 ## 📚 Documentation
 
